@@ -50,6 +50,13 @@ public enum SSTVMode: String, CaseIterable, Sendable, Hashable {
     case scottieDX
     case wraaseSC2180
 
+    public init?(visCode: Int) {
+        guard let mode = Self.allCases.first(where: { $0.visCode == visCode }) else {
+            return nil
+        }
+        self = mode
+    }
+
     public var family: SSTVModeFamily { specification.family }
     public var displayName: String { specification.displayName }
     public var visCode: Int { specification.visCode }
@@ -80,6 +87,7 @@ public enum SSTVMode: String, CaseIterable, Sendable, Hashable {
     }
 
     var channelScanDuration: Double { specification.channelScanDuration }
+    var framePrefixDuration: Double { specification.framePrefixDuration }
 
     private var specification: Specification {
         switch self {
