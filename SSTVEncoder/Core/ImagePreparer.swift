@@ -87,8 +87,6 @@ enum ImagePreparer {
                   ) else {
                 return
             }
-            context.translateBy(x: 0, y: CGFloat(height))
-            context.scaleBy(x: 1, y: -1)
             context.draw(
                 sourceCGImage,
                 in: CGRect(x: 0, y: 0, width: width, height: height)
@@ -114,4 +112,3 @@ enum ImagePreparer {
         )
     }
 }
-
