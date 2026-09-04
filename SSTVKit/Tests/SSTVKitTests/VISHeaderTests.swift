@@ -22,6 +22,13 @@ final class VISHeaderTests: XCTestCase {
         }
     }
 
+    func testEverySupportedModeHasAUniqueSevenBitVISCode() {
+        let codes = SSTVMode.allCases.map(\.visCode)
+
+        XCTAssertTrue(codes.allSatisfy { (0..<128).contains($0) })
+        XCTAssertEqual(Set(codes).count, codes.count)
+    }
+
     func testVISDataFrequenciesForRobot36() {
         let segments = SSTVHeader.segments(visCode: SSTVMode.robot36Color.visCode)
         let dataAndParity = Array(segments[4...11].map(\.frequencyHz))
@@ -30,4 +37,3 @@ final class VISHeaderTests: XCTestCase {
         XCTAssertEqual(dataAndParity, [1300, 1300, 1300, 1100, 1300, 1300, 1300, 1100])
     }
 }
-

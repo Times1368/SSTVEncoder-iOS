@@ -58,6 +58,31 @@ final class ImagePreparerTests: XCTestCase {
         XCTAssertEqual(prepared.raster[160, 128], .white)
     }
 
+    func testHighestResolutionPDModeProducesItsExactRasterSize() throws {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let source = UIGraphicsImageRenderer(
+            size: CGSize(width: 100, height: 100),
+            format: format
+        ).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 100, height: 100))
+        }
+
+        let prepared = try ImagePreparer.prepare(
+            image: source,
+            mode: .pd290,
+            selection: .identity
+        )
+
+        XCTAssertEqual(prepared.preview.cgImage?.width, 800)
+        XCTAssertEqual(prepared.preview.cgImage?.height, 616)
+        XCTAssertEqual(prepared.raster.width, 800)
+        XCTAssertEqual(prepared.raster.height, 616)
+        XCTAssertEqual(prepared.raster[400, 308], .white)
+    }
+
     private func previewPixel(in image: UIImage, x: Int, y: Int) -> RGBPixel? {
         guard let cgImage = image.cgImage,
               let data = cgImage.dataProvider?.data,
