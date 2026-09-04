@@ -56,7 +56,19 @@ public actor SSTVStreamDecoder {
 
     public func finish() throws -> SSTVDecodedFrame {
         try Task.checkCancellation()
-        let flushCount = demodulator.latencySamples + 2
+        let minimumFlushCount = demodulator.latencySamples + 2
+        let flushCount: Int
+        switch selection {
+        case .hfFax:
+            // Fax has no fixed frame boundary. Only drain the demodulator so
+            // silence cannot be mistaken for another complete fax line.
+            flushCount = minimumFlushCount
+        case .automatic, .mode(_):
+            // Header and line timing detection may move the picture start a
+            // few samples forward. Keep a bounded tail guard so the last SSTV
+            // line remains decodable when the recording ends at its last pixel.
+            flushCount = max(minimumFlushCount, sampleRate / 50)
+        }
         if flushCount > 0 {
             frequencies.append(contentsOf: demodulator.process(
                 Array(repeating: 0, count: flushCount)

@@ -8,7 +8,10 @@ final class FrequencyDemodulatorTests: XCTestCase {
         writer.append(frequencyHz: 1_200, duration: 0.009)
 
         var demodulator = try SSTVFrequencyDemodulator(sampleRate: sampleRate)
-        let frequencies = demodulator.process(writer.samples)
+        var frequencies = demodulator.process(writer.samples)
+        frequencies.append(contentsOf: demodulator.process(
+            [Float](repeating: 0, count: demodulator.latencySamples + 2)
+        ))
         let sampler = SSTVToneSampler(
             frequencies: frequencies,
             sampleRate: sampleRate,
