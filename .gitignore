@@ -1,9 +1,14 @@
 .DS_Store
 .build/
+.swiftpm/
+__pycache__/
+*.py[cod]
+.pytest_cache/
 DerivedData/
+dist/
 *.xcresult
 *.xcodeproj/
 *.ipa
 *.wav
+*.xcuserstate
 xcuserdata/
-

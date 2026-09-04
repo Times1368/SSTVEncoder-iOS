@@ -1,0 +1,224 @@
+name: iOS CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  APP_NAME: SSTVEncoder
+  PROJECT_PATH: SSTVEncoder/SSTVEncoder.xcodeproj
+  SCHEME: SSTVEncoder
+  IPA_NAME: SSTVEncoder.ipa
+
+jobs:
+  compatibility:
+    name: Xcode 15.0.1 / Swift 5.9 / iOS 17 compatibility
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode 15.0.1 and verify Swift 5.9
+        run: |
+          sudo xcode-select -s /Applications/Xcode_15.0.1.app/Contents/Developer
+          xcodebuild -version
+          swift --version
+          swift --version | /usr/bin/grep -E "Swift version 5\.9"
+
+      - name: Validate repository contracts
+        run: python3 scripts/validate_project.py --root "$GITHUB_WORKSPACE"
+
+      - name: Test CI validation scripts
+        run: python3 -m unittest discover -s scripts/tests -v
+
+      - name: Run SSTVKit tests with SwiftPM
+        run: swift test --package-path SSTVKit --parallel
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+          xcodegen --version
+
+      - name: Generate Xcode project
+        working-directory: SSTVEncoder
+        run: xcodegen generate --spec project.yml
+
+      - name: Select an available iOS 17 iPhone simulator
+        id: simulator
+        run: |
+          xcrun simctl list devices available --json > "$RUNNER_TEMP/available-simulators.json"
+          python3 scripts/select_simulator.py "$RUNNER_TEMP/available-simulators.json" \
+            --runtime-major 17 \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Run app tests on iOS 17
+        run: |
+          xcodebuild \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData-compatibility" \
+            -only-testing:SSTVEncoderTests \
+            CODE_SIGNING_ALLOWED=NO \
+            test
+
+  tests:
+    name: Xcode 16.4 tests
+    needs: compatibility
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode 16.4
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          xcodebuild -version
+          swift --version
+
+      - name: Validate repository contracts
+        run: python3 scripts/validate_project.py --root "$GITHUB_WORKSPACE"
+
+      - name: Test CI validation scripts
+        run: python3 -m unittest discover -s scripts/tests -v
+
+      - name: Run SSTVKit tests with SwiftPM
+        run: swift test --package-path SSTVKit --parallel
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+          xcodegen --version
+
+      - name: Generate Xcode project
+        working-directory: SSTVEncoder
+        run: xcodegen generate --spec project.yml
+
+      - name: Select an available iPhone simulator
+        id: simulator
+        run: |
+          xcrun simctl list devices available --json > "$RUNNER_TEMP/available-simulators.json"
+          python3 scripts/select_simulator.py "$RUNNER_TEMP/available-simulators.json" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Run app tests
+        run: |
+          xcodebuild \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData-tests" \
+            -only-testing:SSTVEncoderTests \
+            CODE_SIGNING_ALLOWED=NO \
+            test
+
+  package:
+    needs: tests
+    name: Build and package unsigned IPA
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode 16.4
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+          xcodegen --version
+
+      - name: Generate Xcode project
+        working-directory: SSTVEncoder
+        run: xcodegen generate --spec project.yml
+
+      - name: Build unsigned Release app for iOS devices
+        run: |
+          xcodebuild \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData-package" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            build
+
+      - name: Create manual Payload IPA
+        run: |
+          APP_PATH="$RUNNER_TEMP/DerivedData-package/Build/Products/Release-iphoneos/SSTVEncoder.app"
+          STAGING_PATH="$RUNNER_TEMP/ipa-staging"
+          DIST_PATH="$GITHUB_WORKSPACE/dist"
+          test -d "$APP_PATH"
+          mkdir -p "$STAGING_PATH/Payload" "$DIST_PATH"
+          COPYFILE_DISABLE=1 /usr/bin/ditto "$APP_PATH" "$STAGING_PATH/Payload/SSTVEncoder.app"
+          cd "$STAGING_PATH"
+          COPYFILE_DISABLE=1 /usr/bin/zip -qry -X "$DIST_PATH/$IPA_NAME" Payload/SSTVEncoder.app
+
+      - name: Verify IPA and write integrity files
+        run: |
+          python3 scripts/verify_ipa.py "dist/$IPA_NAME" \
+            --manifest dist/verification-manifest.json \
+            --sha256-file "dist/$IPA_NAME.sha256"
+
+      - name: Upload independent unsigned IPA artifact
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: SSTVEncoder-iOS-unsigned-${{ github.sha }}
+          path: |
+            dist/SSTVEncoder.ipa
+            dist/SSTVEncoder.ipa.sha256
+            dist/verification-manifest.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  verify_artifact:
+    needs: package
+    name: Download and independently reverify artifact
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - name: Check out verifier
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download packaged artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SSTVEncoder-iOS-unsigned-${{ github.sha }}
+          path: downloaded-artifact
+
+      - name: Reverify downloaded IPA, checksum, and manifest
+        run: |
+          python3 scripts/verify_ipa.py downloaded-artifact/SSTVEncoder.ipa \
+            --expected-manifest downloaded-artifact/verification-manifest.json \
+            --expected-sha256-file downloaded-artifact/SSTVEncoder.ipa.sha256

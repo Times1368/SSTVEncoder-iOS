@@ -195,14 +195,14 @@ progress, and rejection of stale task results. A source contract script checks
 the iOS 17 target, Swift 5.9 setting, package boundary, WAV format, absence of
 microphone/PTT/network entitlements and APIs, and workflow packaging gates.
 
-CI on `macos-15`:
+CI on `macos-14` and `macos-15`:
 
-1. validate repository contracts;
-2. run `swift test` for `SSTVKit`;
-3. generate the Xcode project;
-4. build and test the app on an available iPhone simulator;
-5. only after tests pass, build for `generic/platform=iOS` with signing fully
-   disabled;
+1. validate repository contracts and their regression tests;
+2. run `swift test` for `SSTVKit` with Xcode 15.0.1 / Swift 5.9;
+3. generate the Xcode project and test the app on an iOS 17 simulator;
+4. repeat package and app tests with Xcode 16.4 on `macos-15`;
+5. only after both test jobs pass, build for `generic/platform=iOS` with
+   signing fully disabled;
 6. package `Payload/SSTVEncoder.app` into an unsigned IPA;
 7. verify plist metadata, arm64 Mach-O, ZIP paths/CRC, and absence of signing
    or provisioning data;
@@ -227,4 +227,3 @@ Version 1 is complete only when:
   minimum-iOS, and unsigned-state checks;
 - the final repository URL, commit SHA, Actions run URL, job conclusions, and
   IPA name/hash/size are recorded for delivery.
-
