@@ -147,25 +147,36 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("模式", systemImage: "waveform")
                 .font(.headline)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 138), spacing: 10)], spacing: 10) {
-                ForEach(SSTVMode.allCases, id: \.self) { mode in
-                    Button {
-                        playback.stop()
-                        viewModel.selectMode(mode)
-                    } label: {
-                        VStack(spacing: 3) {
-                            Text(mode.displayName)
-                                .font(.subheadline.weight(.semibold))
-                            Text("VIS \(mode.visCode)")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+            ForEach(SSTVModeFamily.allCases, id: \.self) { family in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(family.displayName)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 138), spacing: 10)],
+                        spacing: 10
+                    ) {
+                        ForEach(family.modes, id: \.self) { mode in
+                            Button {
+                                playback.stop()
+                                viewModel.selectMode(mode)
+                            } label: {
+                                VStack(spacing: 3) {
+                                    Text(mode.displayName)
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("VIS \(mode.visCode)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 9)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(viewModel.mode == mode ? .blue : .gray.opacity(0.45))
+                            .accessibilityAddTraits(viewModel.mode == mode ? .isSelected : [])
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 9)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(viewModel.mode == mode ? .blue : .gray.opacity(0.45))
-                    .accessibilityAddTraits(viewModel.mode == mode ? .isSelected : [])
                 }
             }
             HStack(spacing: 18) {

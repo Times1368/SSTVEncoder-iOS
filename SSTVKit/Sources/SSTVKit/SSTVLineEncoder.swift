@@ -14,12 +14,10 @@ public enum SSTVEncodingError: Error, Sendable, Equatable {
 
 public enum SSTVLineEncoder {
     public static func framePrefix(for mode: SSTVMode) -> [ToneSegment] {
-        switch mode {
-        case .scottieS1:
+        if mode.family == .scottie {
             return [ToneSegment(frequencyHz: 1200, duration: 0.009)]
-        case .robot36Color, .robot72Color, .martinM1:
-            return []
         }
+        return []
     }
 
     public static func segments(
@@ -34,10 +32,26 @@ public enum SSTVLineEncoder {
             return robot36Segments(for: image, row: row)
         case .robot72Color:
             return robot72Segments(for: image, row: row)
-        case .martinM1:
-            return martinSegments(for: image, row: row)
-        case .scottieS1:
-            return scottieSegments(for: image, row: row)
+        case .pd50, .pd90, .pd120, .pd160, .pd180, .pd240, .pd290:
+            return pdSegments(for: image, mode: mode, scanLine: row)
+        case .martinM1, .martinM2:
+            return martinSegments(
+                for: image,
+                row: row,
+                channelDuration: mode.channelScanDuration
+            )
+        case .scottieS1, .scottieS2, .scottieDX:
+            return scottieSegments(
+                for: image,
+                row: row,
+                channelDuration: mode.channelScanDuration
+            )
+        case .wraaseSC2180:
+            return wraaseSegments(
+                for: image,
+                row: row,
+                channelDuration: mode.channelScanDuration
+            )
         }
     }
 
@@ -50,8 +64,8 @@ public enum SSTVLineEncoder {
                 actualHeight: image.height
             )
         }
-        guard row >= 0, row < mode.height else {
-            throw SSTVEncodingError.rowOutOfRange(row: row, height: mode.height)
+        guard row >= 0, row < mode.scanLineCount else {
+            throw SSTVEncodingError.rowOutOfRange(row: row, height: mode.scanLineCount)
         }
     }
 
@@ -160,13 +174,64 @@ public enum SSTVLineEncoder {
         }
     }
 
-    private static func martinSegments(for image: RGBImage, row: Int) -> [ToneSegment] {
+    private static func pdSegments(
+        for image: RGBImage,
+        mode: SSTVMode,
+        scanLine: Int
+    ) -> [ToneSegment] {
+        var result: [ToneSegment] = []
+        result.reserveCapacity(2 + 4 * image.width)
+        result.append(ToneSegment(frequencyHz: 1200, duration: 0.020))
+        result.append(ToneSegment(frequencyHz: 1500, duration: 0.00208))
+
+        let firstRow = scanLine * 2
+        let secondRow = firstRow + 1
+        let pixelDuration = mode.channelScanDuration / Double(image.width)
+
+        for x in 0..<image.width {
+            let value = SSTVColor.robotComponents(for: image[x, firstRow]).y
+            result.append(ToneSegment(
+                frequencyHz: SSTVModulation.frequency(for: value),
+                duration: pixelDuration
+            ))
+        }
+
+        for keyPath in [
+            \RobotColorComponents.redDifference,
+            \RobotColorComponents.blueDifference,
+        ] {
+            for x in 0..<image.width {
+                let first = SSTVColor.robotComponents(for: image[x, firstRow])
+                let second = SSTVColor.robotComponents(for: image[x, secondRow])
+                let value = (first[keyPath: keyPath] + second[keyPath: keyPath]) / 2
+                result.append(ToneSegment(
+                    frequencyHz: SSTVModulation.frequency(for: value),
+                    duration: pixelDuration
+                ))
+            }
+        }
+
+        for x in 0..<image.width {
+            let value = SSTVColor.robotComponents(for: image[x, secondRow]).y
+            result.append(ToneSegment(
+                frequencyHz: SSTVModulation.frequency(for: value),
+                duration: pixelDuration
+            ))
+        }
+        return result
+    }
+
+    private static func martinSegments(
+        for image: RGBImage,
+        row: Int,
+        channelDuration: Double
+    ) -> [ToneSegment] {
         var result: [ToneSegment] = []
         result.reserveCapacity(965)
         result.append(ToneSegment(frequencyHz: 1200, duration: 0.004862))
         result.append(ToneSegment(frequencyHz: 1500, duration: 0.000572))
 
-        let pixelDuration = 0.146432 / Double(image.width)
+        let pixelDuration = channelDuration / Double(image.width)
         for channel in [RGBChannel.green, .blue, .red] {
             appendRGBScan(
                 to: &result,
@@ -180,10 +245,14 @@ public enum SSTVLineEncoder {
         return result
     }
 
-    private static func scottieSegments(for image: RGBImage, row: Int) -> [ToneSegment] {
+    private static func scottieSegments(
+        for image: RGBImage,
+        row: Int,
+        channelDuration: Double
+    ) -> [ToneSegment] {
         var result: [ToneSegment] = []
         result.reserveCapacity(964)
-        let pixelDuration = 0.138240 / Double(image.width)
+        let pixelDuration = channelDuration / Double(image.width)
 
         result.append(ToneSegment(frequencyHz: 1500, duration: 0.0015))
         appendRGBScan(
@@ -210,6 +279,29 @@ public enum SSTVLineEncoder {
             channel: .red,
             pixelDuration: pixelDuration
         )
+        return result
+    }
+
+    private static func wraaseSegments(
+        for image: RGBImage,
+        row: Int,
+        channelDuration: Double
+    ) -> [ToneSegment] {
+        var result: [ToneSegment] = []
+        result.reserveCapacity(2 + 3 * image.width)
+        result.append(ToneSegment(frequencyHz: 1200, duration: 0.0055225))
+        result.append(ToneSegment(frequencyHz: 1500, duration: 0.0005))
+
+        let pixelDuration = channelDuration / Double(image.width)
+        for channel in [RGBChannel.red, .green, .blue] {
+            appendRGBScan(
+                to: &result,
+                image: image,
+                row: row,
+                channel: channel,
+                pixelDuration: pixelDuration
+            )
+        }
         return result
     }
 

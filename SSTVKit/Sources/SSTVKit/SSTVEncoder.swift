@@ -61,12 +61,16 @@ public struct SSTVEncoder: Sendable {
         writer.append(contentsOf: SSTVHeader.segments(visCode: mode.visCode))
         writer.append(contentsOf: SSTVLineEncoder.framePrefix(for: mode))
 
-        for row in 0..<mode.height {
+        for scanLine in 0..<mode.scanLineCount {
             try Task.checkCancellation()
-            let segments = try SSTVLineEncoder.segments(for: image, mode: mode, row: row)
+            let segments = try SSTVLineEncoder.segments(
+                for: image,
+                mode: mode,
+                row: scanLine
+            )
             writer.append(contentsOf: segments)
             if let progress {
-                await progress(Double(row + 1) / Double(mode.height))
+                await progress(Double(scanLine + 1) / Double(mode.scanLineCount))
             }
         }
         try Task.checkCancellation()

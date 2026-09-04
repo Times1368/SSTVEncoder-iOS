@@ -4,12 +4,14 @@ SSTVEncoder-iOS is an independent SwiftUI app that turns a photo into
 standards-compatible SSTV audio entirely on the iPhone or iPad. Its encoder is
 also available as the reusable, Foundation-only `SSTVKit` Swift package.
 
-Version 1 supports:
+The encoder supports 15 VIS modes:
 
 - Robot 36 Color
 - Robot 72 Color
-- Martin M1
-- Scottie S1
+- PD 50 / 90 / 120 / 160 / 180 / 240 / 290
+- Martin M1 / M2
+- Scottie S1 / S2 / DX
+- Wraase SC2-180
 
 The complete local flow is photo selection, interactive crop/scale, exact
 encoded-raster preview, encoding with progress and cancellation, on-device
@@ -73,10 +75,17 @@ distributing it.
 
 ## Safety and scope
 
-The app only creates, plays, and exports audio. It contains no radio control,
-CAT, PTT, remote server, network client, microphone capture, Hamlib, FT8/FT4,
-or automatic transmission path. Playing the audio into radio equipment is a
-separate operator action outside this project.
+The current app release only creates, plays, and exports audio. It contains no
+radio control, CAT, PTT, remote server, network client, microphone capture,
+Hamlib, FT8/FT4, or automatic transmission path. Playing the audio into radio
+equipment is a separate operator action outside this project.
+
+Automatic VIS decoding is the next phase. It will support imported audio and
+an explicitly started microphone receiver for the same 15 modes. Robot36's
+`Contrib` label is a category rather than a modulation; its current HF Fax
+entry will be implemented as a separate, manually selected IOC 576 / 120 LPM
+receiver because radiofax has no VIS header. No microphone permission is added
+until that receive phase is implemented and tested.
 
 See [the design](docs/design.md) for protocol timing and architecture, and
 [the implementation plan](docs/implementation-plan.md) for the TDD and release
