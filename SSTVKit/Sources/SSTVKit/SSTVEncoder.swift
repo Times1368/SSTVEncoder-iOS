@@ -22,7 +22,13 @@ public struct SSTVEncoder: Sendable {
     public let amplitude: Double
 
     public init(sampleRate: Int = 48_000, amplitude: Double = 0.8) throws {
-        guard sampleRate > 0 else {
+        guard sampleRate > 0,
+              SSTVMode.allCases.allSatisfy({ mode in
+                  SampleClock.roundedCount(
+                      duration: mode.totalDuration,
+                      sampleRate: sampleRate
+                  ) != nil
+              }) else {
             throw SSTVEncodingError.invalidSampleRate(sampleRate)
         }
         guard amplitude.isFinite, amplitude >= 0, amplitude <= 1 else {

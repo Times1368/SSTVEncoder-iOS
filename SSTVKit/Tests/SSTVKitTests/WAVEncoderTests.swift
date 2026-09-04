@@ -30,7 +30,7 @@ final class WAVEncoderTests: XCTestCase {
 
     func testRejectsUnsupportedSampleRateOrOversizedPayload() {
         XCTAssertThrowsError(try PCMBuffer(sampleRate: 0, samples: []))
+        XCTAssertThrowsError(try WAVEncoder.encodeRawPCM(sampleRate: 48_000, byteCount: 1))
         XCTAssertThrowsError(try WAVEncoder.encodeRawPCM(sampleRate: 48_000, byteCount: UInt64(UInt32.max)))
     }
 }
-

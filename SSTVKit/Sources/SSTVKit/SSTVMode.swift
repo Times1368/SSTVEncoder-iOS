@@ -60,6 +60,7 @@ public enum SSTVMode: String, CaseIterable, Sendable, Hashable {
     /// The sample count produced by the cumulative-time clock.
     public func sampleCount(at sampleRate: Int) -> Int {
         guard sampleRate > 0 else { return 0 }
-        return Int((totalDuration * Double(sampleRate)).rounded())
+        return SampleClock.roundedCount(duration: totalDuration, sampleRate: sampleRate)
+            ?? Int.max
     }
 }

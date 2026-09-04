@@ -34,6 +34,10 @@ final class ModeTests: XCTestCase {
         XCTAssertEqual(SSTVMode.scottieS1.sampleCount(at: 48_000), 5_306_079)
     }
 
+    func testSampleCountSaturatesInsteadOfOverflowing() {
+        XCTAssertEqual(SSTVMode.martinM1.sampleCount(at: .max), .max)
+    }
+
     func testAllCasesAreExactlyTheVersionOneModes() {
         XCTAssertEqual(
             SSTVMode.allCases,
@@ -41,4 +45,3 @@ final class ModeTests: XCTestCase {
         )
     }
 }
-

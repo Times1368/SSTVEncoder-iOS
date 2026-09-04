@@ -38,16 +38,25 @@ public struct ToneWriter: Sendable {
     public mutating func append(frequencyHz: Double, duration: Double) {
         guard sampleRate > 0,
               amplitude.isFinite,
+              amplitude >= 0,
+              amplitude <= 1,
               duration.isFinite,
               duration >= 0,
               frequencyHz.isFinite else { return }
 
-        elapsedDuration += duration
-        let targetCount = Int((elapsedDuration * Double(sampleRate)).rounded())
+        let updatedDuration = elapsedDuration + duration
+        guard let targetCount = SampleClock.roundedCount(
+            duration: updatedDuration,
+            sampleRate: sampleRate
+        ) else { return }
+
+        let phaseIncrement = 2 * Double.pi * frequencyHz / Double(sampleRate)
+        guard phaseIncrement.isFinite else { return }
+
+        elapsedDuration = updatedDuration
         let count = max(0, targetCount - samples.count)
         guard count > 0 else { return }
 
-        let phaseIncrement = 2 * Double.pi * frequencyHz / Double(sampleRate)
         var currentPhase = phase
         for _ in 0..<count {
             samples.append(Float(sin(currentPhase) * amplitude))

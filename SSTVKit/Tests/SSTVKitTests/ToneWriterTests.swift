@@ -15,17 +15,30 @@ final class ToneWriterTests: XCTestCase {
     }
 
     func testOscillatorMaintainsPhaseAcrossToneBoundary() {
-        var writer = ToneWriter(sampleRate: 48_000, amplitude: 0.8, capacity: 2_000)
-        writer.append(frequencyHz: 1900, duration: 0.013)
+        let sampleRate = 48_000
+        let firstFrequency = 1900.0
+        var writer = ToneWriter(sampleRate: sampleRate, amplitude: 0.8, capacity: 2_000)
+        writer.append(frequencyHz: firstFrequency, duration: 0.013)
         let boundary = writer.samples.count
-        let phase = writer.phase
         writer.append(frequencyHz: 2300, duration: 0.017)
+
+        let expectedPhase = (
+            2 * Double.pi * firstFrequency * Double(boundary) / Double(sampleRate)
+        ).truncatingRemainder(dividingBy: 2 * Double.pi)
 
         XCTAssertEqual(
             writer.samples[boundary],
-            Float(sin(phase) * 0.8),
+            Float(sin(expectedPhase) * 0.8),
             accuracy: 0.000_001
         )
+    }
+
+    func testExtremeTimingInputDoesNotOverflowIntegerConversion() {
+        var writer = ToneWriter(sampleRate: .max, amplitude: 1)
+
+        writer.append(frequencyHz: 1900, duration: 1)
+
+        XCTAssertTrue(writer.samples.isEmpty)
     }
 
     func testGeneratedToneHasExpectedFrequencyAndAmplitude() {

@@ -45,12 +45,20 @@ final class EncoderTests: XCTestCase {
         XCTAssertTrue(zip(values, values.dropFirst()).allSatisfy { $0.0 <= $0.1 })
     }
 
-    func testCancelledTaskDoesNotPublishACompleteSignal() async throws {
+    func testCancellationIsObservedAfterEncodingHasStarted() async throws {
+        let recorder = ProgressRecorder()
         let encoder = try SSTVEncoder(sampleRate: 48_000, amplitude: 0.8)
         let task = Task {
-            try await encoder.encode(solidImage(for: .martinM1), mode: .martinM1)
+            try await encoder.encode(
+                solidImage(for: .martinM1),
+                mode: .martinM1
+            ) { value in
+                await recorder.append(value)
+                withUnsafeCurrentTask { current in
+                    current?.cancel()
+                }
+            }
         }
-        task.cancel()
 
         do {
             _ = try await task.value
@@ -58,11 +66,22 @@ final class EncoderTests: XCTestCase {
         } catch is CancellationError {
             // Expected.
         }
+
+        let values = await recorder.values()
+        XCTAssertEqual(values.count, 1)
+        if let first = values.first {
+            XCTAssertGreaterThan(first, 0)
+            XCTAssertLessThan(first, 1)
+        }
     }
 
     func testRejectsInvalidConfigurationAndRasterSize() async throws {
         XCTAssertThrowsError(try SSTVEncoder(sampleRate: 0))
+        XCTAssertThrowsError(try SSTVEncoder(sampleRate: .max))
+        XCTAssertThrowsError(try SSTVEncoder(sampleRate: 48_000, amplitude: -0.1))
         XCTAssertThrowsError(try SSTVEncoder(sampleRate: 48_000, amplitude: 1.1))
+        XCTAssertThrowsError(try SSTVEncoder(sampleRate: 48_000, amplitude: .nan))
+        XCTAssertThrowsError(try SSTVEncoder(sampleRate: 48_000, amplitude: .infinity))
 
         let encoder = try SSTVEncoder()
         let wrong = try RGBImage(width: 1, height: 1, pixels: [.black])

@@ -3,6 +3,7 @@ import Foundation
 public enum WAVEncodingError: Error, Sendable, Equatable {
     case invalidSampleRate(Int)
     case payloadTooLarge(UInt64)
+    case invalidPCMByteCount(UInt64)
 }
 
 public enum WAVEncoder {
@@ -11,10 +12,13 @@ public enum WAVEncoder {
         var data = try encodeRawPCM(sampleRate: buffer.sampleRate, byteCount: byteCount)
         data.reserveCapacity(44 + Int(byteCount))
 
-        for sample in buffer.samples {
-            var pcm = quantize(sample).littleEndian
-            Swift.withUnsafeBytes(of: &pcm) { data.append(contentsOf: $0) }
+        var payload = [UInt8](repeating: 0, count: Int(byteCount))
+        for (index, sample) in buffer.samples.enumerated() {
+            let bits = UInt16(bitPattern: quantize(sample))
+            payload[index * 2] = UInt8(truncatingIfNeeded: bits)
+            payload[index * 2 + 1] = UInt8(truncatingIfNeeded: bits >> 8)
         }
+        data.append(contentsOf: payload)
         return data
     }
 
@@ -28,6 +32,9 @@ public enum WAVEncoder {
         guard byteCount <= UInt64(UInt32.max) - 36,
               byteCount <= UInt64(Int.max) - 44 else {
             throw WAVEncodingError.payloadTooLarge(byteCount)
+        }
+        guard byteCount.isMultiple(of: 2) else {
+            throw WAVEncodingError.invalidPCMByteCount(byteCount)
         }
 
         var data = Data()
