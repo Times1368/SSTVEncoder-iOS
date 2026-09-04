@@ -2,6 +2,29 @@ import XCTest
 @testable import SSTVKit
 
 final class FrequencyDemodulatorTests: XCTestCase {
+    func testToneScoreIgnoresPhaseAlignedResidualCarrierRipple() throws {
+        let sampleRate = 12_000
+        var writer = ToneWriter(sampleRate: sampleRate, amplitude: 0.8)
+        writer.append(frequencyHz: 1_200, duration: 0.009)
+
+        var demodulator = try SSTVFrequencyDemodulator(sampleRate: sampleRate)
+        let frequencies = demodulator.process(writer.samples)
+        let sampler = SSTVToneSampler(
+            frequencies: frequencies,
+            sampleRate: sampleRate,
+            latencySamples: demodulator.latencySamples
+        )
+
+        let measurement = try XCTUnwrap(sampler.toneScore(
+            rawStart: 0,
+            duration: 0.009,
+            targetFrequency: 1_200
+        ))
+
+        XCTAssertEqual(measurement.mean, 1_200, accuracy: 12)
+        XCTAssertLessThanOrEqual(measurement.score, 12)
+    }
+
     func testPureToneIsRecoveredWithinTenHertz() throws {
         let sampleRate = 12_000
         var writer = ToneWriter(sampleRate: sampleRate, amplitude: 0.8)

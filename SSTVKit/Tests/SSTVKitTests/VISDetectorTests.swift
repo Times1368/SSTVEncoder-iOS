@@ -2,6 +2,20 @@ import XCTest
 @testable import SSTVKit
 
 final class VISDetectorTests: XCTestCase {
+    func testDetectsPhaseAlignedHeaderAtTheFirstSample() throws {
+        let sampleRate = 12_000
+        let mode = SSTVMode.robot36Color
+        var writer = ToneWriter(sampleRate: sampleRate, amplitude: 0.8)
+        writer.append(contentsOf: SSTVHeader.segments(visCode: mode.visCode))
+        let buffer = try PCMBuffer(sampleRate: sampleRate, samples: writer.samples)
+
+        let detection = try XCTUnwrap(SSTVHeaderDetector.detect(in: buffer))
+
+        XCTAssertEqual(detection.mode, mode)
+        XCTAssertLessThanOrEqual(detection.headerStartSample, sampleRate / 250)
+        XCTAssertEqual(detection.frequencyOffsetHz, 0, accuracy: 12)
+    }
+
     func testDetectsEverySupportedVISCodeWithSilenceAndFrequencyOffset() throws {
         let sampleRate = 12_000
         let leadingSilence = sampleRate / 7

@@ -161,7 +161,9 @@ public enum SSTVHeaderDetector {
         sampler.mean(
             rawStart: start + sampler.samples(for: from),
             rawEnd: start + sampler.samples(for: to),
-            maximumSamples: 48
+            // A prime-sized budget prevents regular sampling from phase-locking
+            // to the demodulator's residual double-carrier ripple.
+            maximumSamples: 47
         )
     }
 }

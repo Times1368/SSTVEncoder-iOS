@@ -49,25 +49,13 @@ struct SSTVToneSampler {
               let average = mean(
                   rawStart: rawStart,
                   rawEnd: rawStart + length,
-                  maximumSamples: 48
+                  maximumSamples: 47
               ) else { return nil }
 
-        let start = rawStart + latencySamples
-        let end = start + length
-        let step = max(1, length / 48)
-        var absoluteError = 0.0
-        var count = 0
-        var index = start + min(step / 2, max(0, length - 1))
-        while index < end, index < frequencies.count {
-            let value = Double(frequencies[index])
-            if value.isFinite, value >= 700, value <= 3_000 {
-                absoluteError += abs(value - targetFrequency)
-                count += 1
-            }
-            index += step
-        }
-        guard count >= 3 else { return nil }
-        return (absoluteError / Double(count), average)
+        // The quadrature demodulator leaves a small double-carrier ripple. Its
+        // mean is centered on the tone, so score the measured mean instead of
+        // treating each instantaneous ripple sample as a frequency error.
+        return (abs(average - targetFrequency), average)
     }
 
     func bestToneStart(
