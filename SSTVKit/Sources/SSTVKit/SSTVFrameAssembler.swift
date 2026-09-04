@@ -66,6 +66,7 @@ final class SSTVFrameAssembler {
                 + tolerance + sampler.samples(for: syncDuration)
 
             var lineStart = expectedLineStart
+            var measuredFrequencyOffset: Double?
             if enoughForSearch,
                let sync = sampler.bestToneStart(
                    near: expectedSyncStart,
@@ -76,13 +77,21 @@ final class SSTVFrameAssembler {
                 lineStart = sync.start - syncOffset
                 let measuredOffset = sync.mean - 1_200
                 if abs(measuredOffset) <= 300 {
-                    frequencyOffsetHz = frequencyOffsetHz * 0.75 + measuredOffset * 0.25
+                    measuredFrequencyOffset = measuredOffset
                 }
             }
 
             guard lineStart >= 0,
                   lineStart + lineSamples <= sampler.availableRawSampleCount else {
                 break
+            }
+
+            // Commit synchronization state only when this line can be decoded.
+            // Otherwise repeated appends of an incomplete line would apply the
+            // same correction multiple times and make output chunk-dependent.
+            if let measuredFrequencyOffset {
+                frequencyOffsetHz = frequencyOffsetHz * 0.75
+                    + measuredFrequencyOffset * 0.25
             }
 
             let rowsBefore = completedRows
