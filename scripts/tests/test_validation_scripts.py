@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import plistlib
 import stat
 import struct
@@ -10,6 +11,9 @@ import unittest
 import zipfile
 from pathlib import Path
 
+from PIL import Image
+
+from scripts.generate_app_icon import generate_asset_catalog
 from scripts.select_simulator import candidates_from_document, choose
 from scripts.validate_project import ContractValidator
 from scripts.verify_ipa import (
@@ -184,6 +188,56 @@ class SimulatorSelectionTests(unittest.TestCase):
         self.assertEqual(newest.name, "iPhone 16 Pro")
 
 
+class AppIconGenerationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.output = self.root / "Assets.xcassets"
+
+    def test_placeholder_creates_opaque_single_size_app_icon_catalog(self) -> None:
+        icon_path = generate_asset_catalog(source=None, output=self.output)
+
+        with Image.open(icon_path) as icon:
+            self.assertEqual(icon.size, (1024, 1024))
+            self.assertEqual(icon.mode, "RGB")
+
+        contents = json.loads(
+            (self.output / "AppIcon.appiconset" / "Contents.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            contents["images"],
+            [
+                {
+                    "filename": "AppIcon-1024.png",
+                    "idiom": "universal",
+                    "platform": "ios",
+                    "size": "1024x1024",
+                }
+            ],
+        )
+
+    def test_exact_1024_source_is_converted_to_opaque_rgb(self) -> None:
+        source = self.root / "source.png"
+        Image.new("RGBA", (1024, 1024), (12, 34, 56, 100)).save(source)
+
+        icon_path = generate_asset_catalog(source=source, output=self.output)
+
+        with Image.open(icon_path) as icon:
+            self.assertEqual(icon.mode, "RGB")
+            self.assertEqual(icon.getpixel((0, 0)), (12, 34, 56))
+
+    def test_non_1024_source_is_rejected_before_output_is_written(self) -> None:
+        source = self.root / "wrong-size.png"
+        Image.new("RGB", (512, 512), "black").save(source)
+
+        with self.assertRaisesRegex(ValueError, "1024 x 1024"):
+            generate_asset_catalog(source=source, output=self.output)
+        self.assertFalse(self.output.exists())
+
+
 class ProjectContractTests(unittest.TestCase):
     PROJECT = """\
 name: SSTVEncoder
@@ -197,12 +251,15 @@ targets:
   SSTVEncoder:
     type: application
     platform: iOS
+    resources:
+      - path: Resources/Generated/Assets.xcassets
     settings:
       base:
         SWIFT_VERSION: "5.0"
         PRODUCT_BUNDLE_IDENTIFIER: io.github.times1368.sstvencoder
         MARKETING_VERSION: 1.0.0
         CURRENT_PROJECT_VERSION: 1
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       - package: SSTVKit
   SSTVEncoderTests:
@@ -240,6 +297,23 @@ targets:
         validator = ContractValidator(self.root)
         validator.validate_xcodegen_project()
         self.assertTrue(any("SWIFT_VERSION" in error for error in validator.errors))
+
+    def test_app_icon_catalog_and_build_setting_are_required(self) -> None:
+        project = self.root / "SSTVEncoder" / "project.yml"
+        project.write_text(
+            self.PROJECT.replace(
+                "    resources:\n"
+                "      - path: Resources/Generated/Assets.xcassets\n",
+                "",
+            ).replace(
+                "        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon\n",
+                "",
+            ),
+            encoding="utf-8",
+        )
+        validator = ContractValidator(self.root)
+        validator.validate_xcodegen_project()
+        self.assertTrue(any("AppIcon" in error for error in validator.errors))
 
     def test_test_target_requires_a_direct_sstvkit_dependency(self) -> None:
         project = self.root / "SSTVEncoder" / "project.yml"

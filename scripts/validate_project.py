@@ -193,6 +193,14 @@ class ContractValidator:
             (r"^\s{2}SSTVKit:\s*$", "project.yml must declare the local SSTVKit package"),
             (r"^\s+path:\s*[\"']?\.\./SSTVKit[\"']?\s*$", "SSTVKit must be referenced through ../SSTVKit"),
             (r"^\s+-\s+package:\s*SSTVKit\s*$", "the app must link the SSTVKit package product"),
+            (
+                r"^\s+-\s+path:\s*[\"']?Resources/Generated/Assets\.xcassets[\"']?\s*$",
+                "XcodeGen must include the generated AppIcon asset catalog",
+            ),
+            (
+                r"^\s*ASSETCATALOG_COMPILER_APPICON_NAME:\s*[\"']?AppIcon[\"']?\s*$",
+                "XcodeGen must select the AppIcon asset set",
+            ),
         )
         for pattern, message in exact_checks:
             self.require_regex(project, pattern, message)
@@ -292,6 +300,36 @@ class ContractValidator:
                     f"{self.relative(path)}:{line} contains forbidden microphone/network/PTT metadata"
                 )
 
+    def validate_app_icon(self) -> None:
+        generator = self.read_text("scripts/generate_app_icon.py")
+        source_notes = self.read_text(
+            "SSTVEncoder/Resources/AppIconSource/README.md"
+        )
+
+        if generator:
+            required_generator_patterns = (
+                (r"^from\s+PIL\s+import\s+", "AppIcon generator must use Pillow"),
+                (r"^ICON_SIZE\s*=\s*1024\s*$", "AppIcon generator must require a 1024 px source"),
+                (r"AppIcon\.appiconset", "AppIcon generator must create an AppIcon asset set"),
+                (r"[\"']platform[\"']\s*:\s*[\"']ios[\"']", "AppIcon catalog must target iOS"),
+                (r"convert\s*\(\s*[\"']RGB[\"']\s*\)", "AppIcon generator must remove alpha"),
+            )
+            for pattern, message in required_generator_patterns:
+                self.require_regex(generator, pattern, message)
+
+        if source_notes:
+            self.require_regex(
+                source_notes,
+                r"SSTVEncoder/Resources/AppIconSource/AppIcon-1024\.png",
+                "AppIcon source notes must name the conventional 1024 px source path",
+            )
+            self.require_regex(
+                source_notes,
+                r"1024\s*x\s*1024",
+                "AppIcon source notes must require exact 1024 x 1024 dimensions",
+                flags=re.MULTILINE | re.IGNORECASE,
+            )
+
     def validate_workflow(self) -> None:
         workflow = self.read_text(".github/workflows/ios.yml")
         if not workflow:
@@ -304,6 +342,9 @@ class ContractValidator:
             (r"Xcode_15\.0\.1\.app", "compatibility job must explicitly select Xcode 15.0.1"),
             (r"Swift version 5\\\.9", "compatibility job must verify the Swift 5.9 toolchain"),
             (r"Xcode_16\.4\.app", "workflow must explicitly select Xcode 16.4"),
+            (r"python3\s+-m\s+venv", "workflow must isolate the AppIcon generator dependency"),
+            (r"Pillow==12\.3\.0", "workflow must pin the Pillow AppIcon dependency"),
+            (r"scripts/generate_app_icon\.py", "workflow must generate AppIcon assets"),
             (r"scripts/validate_project\.py", "workflow must run the source contract validator"),
             (r"swift\s+test\s+--package-path\s+SSTVKit", "workflow must run SwiftPM tests"),
             (r"xcodegen\s+generate", "workflow must generate the Xcode project"),
@@ -336,12 +377,22 @@ class ContractValidator:
         for pattern, message in forbidden_patterns:
             self.reject_regex(workflow, pattern, message, flags=re.MULTILINE | re.IGNORECASE)
 
+        icon_generation_count = len(
+            re.findall(r"scripts/generate_app_icon\.py", workflow)
+        )
+        xcodegen_count = len(re.findall(r"xcodegen\s+generate", workflow))
+        if icon_generation_count != xcodegen_count:
+            self.fail(
+                "every XcodeGen invocation must have a matching AppIcon generation step"
+            )
+
     def validate(self) -> Sequence[str]:
         if not self.root.is_dir():
             self.fail(f"repository root does not exist: {self.root}")
             return self.errors
         self.validate_package()
         self.validate_xcodegen_project()
+        self.validate_app_icon()
         self.validate_workflow()
         return self.errors
 
@@ -370,7 +421,8 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     print(
         "Contract validation passed: iOS 17 / Swift tools 5.9, local SSTVKit boundary, "
-        "48 kHz Int16 WAV path, no network/microphone/PTT coupling, and gated unsigned IPA CI."
+        "48 kHz Int16 WAV path, generated AppIcon, no network/microphone/PTT coupling, "
+        "and gated unsigned IPA CI."
     )
     return 0
 

@@ -6,6 +6,7 @@ __pycache__/
 .pytest_cache/
 DerivedData/
 dist/
+SSTVEncoder/Resources/Generated/
 *.xcresult
 *.xcodeproj/
 *.ipa

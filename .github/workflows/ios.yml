@@ -32,11 +32,19 @@ jobs:
           swift --version
           swift --version | /usr/bin/grep -E "Swift version 5\.9"
 
+      - name: Generate AppIcon asset catalog
+        run: |
+          python3 -m venv "$RUNNER_TEMP/app-icon-venv"
+          "$RUNNER_TEMP/app-icon-venv/bin/python" -m pip install \
+            --disable-pip-version-check --no-input "Pillow==12.3.0"
+          "$RUNNER_TEMP/app-icon-venv/bin/python" scripts/generate_app_icon.py
+
       - name: Validate repository contracts
         run: python3 scripts/validate_project.py --root "$GITHUB_WORKSPACE"
 
       - name: Test CI validation scripts
-        run: python3 -m unittest discover -s scripts/tests -v
+        run: |
+          "$RUNNER_TEMP/app-icon-venv/bin/python" -m unittest discover -s scripts/tests -v
 
       - name: Run SSTVKit tests with SwiftPM
         run: swift test --package-path SSTVKit --parallel
@@ -89,11 +97,19 @@ jobs:
           xcodebuild -version
           swift --version
 
+      - name: Generate AppIcon asset catalog
+        run: |
+          python3 -m venv "$RUNNER_TEMP/app-icon-venv"
+          "$RUNNER_TEMP/app-icon-venv/bin/python" -m pip install \
+            --disable-pip-version-check --no-input "Pillow==12.3.0"
+          "$RUNNER_TEMP/app-icon-venv/bin/python" scripts/generate_app_icon.py
+
       - name: Validate repository contracts
         run: python3 scripts/validate_project.py --root "$GITHUB_WORKSPACE"
 
       - name: Test CI validation scripts
-        run: python3 -m unittest discover -s scripts/tests -v
+        run: |
+          "$RUNNER_TEMP/app-icon-venv/bin/python" -m unittest discover -s scripts/tests -v
 
       - name: Run SSTVKit tests with SwiftPM
         run: swift test --package-path SSTVKit --parallel
@@ -143,6 +159,13 @@ jobs:
         run: |
           sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
           xcodebuild -version
+
+      - name: Generate AppIcon asset catalog
+        run: |
+          python3 -m venv "$RUNNER_TEMP/app-icon-venv"
+          "$RUNNER_TEMP/app-icon-venv/bin/python" -m pip install \
+            --disable-pip-version-check --no-input "Pillow==12.3.0"
+          "$RUNNER_TEMP/app-icon-venv/bin/python" scripts/generate_app_icon.py
 
       - name: Install XcodeGen
         run: |

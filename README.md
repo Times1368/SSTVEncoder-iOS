@@ -20,6 +20,7 @@ playback, and export of the same signal as a 48 kHz mono signed 16-bit PCM WAV.
 - iOS 17.0 or newer
 - Xcode 15.0.1 or newer (Swift 5.9 toolchain)
 - XcodeGen 2.38 or newer
+- Python 3 and Pillow 12.3.0 for build-time AppIcon generation
 
 `SWIFT_VERSION: 5.0` in `project.yml` is Xcode's identifier for Swift 5
 language mode; the compatibility workflow selects Xcode 15.0.1 and verifies
@@ -29,6 +30,8 @@ the Swift 5.9 compiler.
 
 ```sh
 brew install xcodegen
+python3 -m pip install --disable-pip-version-check --no-input "Pillow==12.3.0"
+python3 scripts/generate_app_icon.py
 cd SSTVEncoder
 xcodegen generate --spec project.yml
 open SSTVEncoder.xcodeproj
@@ -36,6 +39,13 @@ open SSTVEncoder.xcodeproj
 
 The generated `.xcodeproj` is intentionally not committed. The app has no
 third-party runtime dependencies.
+
+The icon generator draws a deterministic 1024 px placeholder by default. To
+use finished artwork, place an exact 1024 x 1024 PNG at
+`SSTVEncoder/Resources/AppIconSource/AppIcon-1024.png`; the same command will
+pick it up automatically. On Windows, where project generation is not needed,
+run the script with `python` to inspect or prepare the asset catalog. Generated
+assets are ignored by Git and recreated by CI.
 
 ## Tests
 
