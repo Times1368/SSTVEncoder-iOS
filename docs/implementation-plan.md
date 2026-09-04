@@ -1,6 +1,72 @@
 # SSTVEncoder-iOS implementation plan
 
-Status: accepted execution plan
+Status: version 1 complete; encoder expansion active; receiver follows
+
+## Encoder expansion - 15 VIS modes
+
+### Commit A - Lock the expanded protocol design
+
+- Record exact VIS codes, rasters, channel timing, radio-line counts, and
+  cumulative 48 kHz durations for PD, Martin M2, Scottie S2/DX, and Wraase
+  SC2-180.
+- Define `Contrib` as a receive-mode category and keep HF Fax outside the
+  fixed-frame `SSTVMode` model.
+
+Gate: every number is traceable to the Dayton specification and reproduces
+the published approximate transmission time.
+
+### Commit B - Add failing expanded-encoder specifications
+
+- Extend metadata and sample-count tests from 4 to 15 VIS modes.
+- Specify Martin/Scottie timing variants, Wraase R/G/B order, and PD two-row
+  Y/R-Y/B-Y/Y ordering with vertically averaged chroma.
+- Specify PD progress in radio lines rather than raster rows.
+
+Gate: tests describe all new behavior before production sources change. The
+uncompiled red state remains local and is not pushed by itself.
+
+### Commit C - Implement the expanded encoder and app selection
+
+- Replace repeated mode switches with one immutable descriptor per mode.
+- Add protocol-family metadata and a radio-line count distinct from raster
+  height.
+- Implement shared Martin, Scottie, PD, and Wraase line strategies.
+- Group the mode selector by family while preserving crop invalidation,
+  progress, playback, and 48 kHz mono Int16 WAV export.
+
+Gate: local Python contract tests and `git diff --check` pass. Push once, then
+return the Actions run URL without waiting, as required for this Windows host.
+
+## Receiver phase - automatic SSTV plus Contrib / HF Fax
+
+### Commit D - Add failing decoder-core specifications
+
+- Specify streaming PCM input, chunk-boundary invariance, VIS LSB/parity
+  validation, frequency offset, cancellation, and progressive image updates.
+- Add deterministic encoder-to-decoder round trips for every supported VIS
+  family, plus noise and truncated-input cases.
+- Specify that VIS-confirmed and timing-inferred detections are distinct.
+
+### Commit E - Implement the reusable decoder core
+
+- Add Foundation-only FM demodulation, tone classification, header detection,
+  line synchronization, per-family color reconstruction, and auto-mode state.
+- Keep decoder state bounded and make input sample rate explicit.
+- Add a manual IOC 576 / 120 LPM grayscale HF Fax profile outside
+  `SSTVMode`; it cannot be VIS-auto-selected.
+
+### Commit F - Add receive UI and audio adapters
+
+- Add imported-audio decoding and an explicitly started AVAudioEngine
+  microphone session with progressive preview, stop/reset, and image export.
+- Request microphone permission only on receive; add the required privacy
+  string and an in-app explanation that raw audio is not retained.
+- Do not add networking, PTT, CAT, or any automatic transmit path.
+
+Gate: both macOS SwiftPM suites, iOS simulator lifecycle tests, unsigned device
+build, IPA verification, and source privacy/security contracts pass in Actions.
+Real-device microphone and over-the-air reception are reported separately and
+never claimed from CI.
 
 ## Commit 1 - Lock design and boundaries
 
@@ -64,4 +130,3 @@ Gate: the full workflow succeeds from a clean checkout.
    and manifest into the delivery output directory.
 6. Report repository, exact final SHA, run ID/URL, every required job result,
    test totals, IPA filename/size/SHA-256, and any validation that was not run.
-

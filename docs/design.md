@@ -1,8 +1,8 @@
 # SSTVEncoder-iOS design
 
-Status: approved by the user for implementation
+Status: version 1 shipped; expanded encoding and receiving roadmap approved
 
-Date: 2026-09-03
+Date: 2026-09-04
 
 ## 1. Product boundary
 
@@ -11,10 +11,23 @@ SSTVEncoder-iOS is a standalone iOS 17.0+ application with a reusable
 plays that waveform locally, and exports it as WAV.
 
 Version 1 includes Robot 36 Color, Robot 72 Color, Martin M1, and Scottie S1.
-It does not receive or decode SSTV and does not contain PTT, CAT, rig control,
-Radio Lite networking, microphone capture, background transmission, accounts,
-analytics, or cloud storage. Playing an audio file near a radio is an operator
-action outside the app; the app never keys a transmitter.
+The expanded encoder adds PD 50/90/120/160/180/240/290, Martin M2, Scottie
+S2/DX, and Wraase SC2-180. These are the 15 VIS-identified color modes exposed
+by the first encoder expansion.
+
+Receiving is a separate phase. It will add automatic VIS detection and
+progressive decoding for the same 15 modes, with both imported audio and an
+explicitly started live microphone input. The microphone is never used by the
+encoder and will only be requested when the user starts receiving. Raw input
+audio is processed in memory rather than retained. The receiver will also
+offer a manually selected `Contrib / HF Fax` profile. `Contrib` is a category
+label used by Robot36, not an SSTV mode; HF Fax has no VIS header and therefore
+cannot be selected by VIS auto-detection.
+
+No phase contains PTT, CAT, rig control, Radio Lite networking, background
+transmission, accounts, analytics, or cloud storage. Playing generated audio
+near a radio is an operator action outside the app; the app never keys a
+transmitter.
 
 ## 2. Platform and repository
 
@@ -77,14 +90,41 @@ The common header is:
 
 A VIS one is 1100 Hz and zero is 1300 Hz. The header lasts 0.910 seconds.
 
-### 4.2 Mode table
+### 4.2 RGB mode table
 
-| Mode | VIS | Raster | Picture line sequence | Picture time |
-|---|---:|---:|---|---:|
-| Robot 36 Color | 8 | 320x240 | 9 ms sync, 3 ms porch, 88 ms Y, 4.5 ms alternating separator, 1.5 ms porch, 44 ms alternating R-Y/B-Y | 36.000 s |
-| Robot 72 Color | 12 | 320x240 | 9 ms sync, 3 ms porch, 138 ms Y, 4.5/1.5 ms separator/porch, 69 ms R-Y, 4.5/1.5 ms separator/porch, 69 ms B-Y | 72.000 s |
-| Martin M1 | 44 | 320x256 | 4.862 ms sync, 0.572 ms porch, then G/B/R scans of 146.432 ms, each followed by 0.572 ms separator | 114.290176 s |
-| Scottie S1 | 60 | 320x256 | one initial 9 ms sync; each line is 1.5 ms separator + 138.240 ms G, 1.5 ms separator + 138.240 ms B, 9 ms sync, 1.5 ms porch, 138.240 ms R | 109.633320 s |
+| Mode | VIS | Raster | Channel scan | Radio lines | Picture time |
+|---|---:|---:|---:|---:|---:|
+| Robot 36 Color | 8 | 320x240 | 88 ms Y + 44 ms alternating chroma | 240 | 36.000000 s |
+| Robot 72 Color | 12 | 320x240 | 138 ms Y + 69 ms R-Y + 69 ms B-Y | 240 | 72.000000 s |
+| Martin M1 | 44 | 320x256 | 146.432 ms per G/B/R channel | 256 | 114.290176 s |
+| Martin M2 | 40 | 320x256 | 73.216 ms per G/B/R channel | 256 | 58.060288 s |
+| Scottie S1 | 60 | 320x256 | 138.240 ms per G/B/R channel | 256 | 109.633320 s |
+| Scottie S2 | 56 | 320x256 | 88.064 ms per G/B/R channel | 256 | 71.098152 s |
+| Scottie DX | 76 | 320x256 | 345.600 ms per G/B/R channel | 256 | 268.885800 s |
+| Wraase SC2-180 | 55 | 320x256 | 235.000 ms per R/G/B channel | 256 | 182.021760 s |
+
+Martin modes use a 4.862 ms sync, a 0.572 ms porch, G/B/R scans, and a
+0.572 ms separator after every scan. Scottie modes use one initial 9 ms sync;
+each regular line is a 1.5 ms separator and Green scan, a 1.5 ms separator and
+Blue scan, a 9 ms sync, a 1.5 ms porch, then the Red scan. Wraase SC2-180 uses
+a 5.5225 ms sync, a 0.5 ms porch, then contiguous Red, Green, and Blue scans.
+
+### 4.3 PD mode table
+
+One PD radio line carries two raster rows. It contains a 20 ms sync, a 2.08 ms
+porch, the first luminance row, vertically averaged R-Y, vertically averaged
+B-Y, and the second luminance row. Chroma has one sample per horizontal pixel;
+only the two raster rows are averaged.
+
+| Mode | VIS | Raster | Channel scan | Radio-line time | Picture time |
+|---|---:|---:|---:|---:|---:|
+| PD 50 | 93 | 320x256 | 91.520 ms | 388.160 ms | 49.684480 s |
+| PD 90 | 99 | 320x256 | 170.240 ms | 703.040 ms | 89.989120 s |
+| PD 120 | 95 | 640x496 | 121.600 ms | 508.480 ms | 126.103040 s |
+| PD 160 | 98 | 512x400 | 195.584 ms | 804.416 ms | 160.883200 s |
+| PD 180 | 96 | 640x496 | 183.040 ms | 754.240 ms | 187.051520 s |
+| PD 240 | 97 | 640x496 | 244.480 ms | 1000.000 ms | 248.000000 s |
+| PD 290 | 94 | 800x616 | 228.800 ms | 937.280 ms | 288.682240 s |
 
 Robot 36 uses 1500 Hz before R-Y on even rows and 2300 Hz before B-Y on odd
 rows. Chroma is averaged over each 2x2 pixel block, then repeated for the two
@@ -93,7 +133,7 @@ each horizontal pair and repeats the value for both positions. This implements
 the Robot 4:2:0 and 4:2:2 sampling used by established encoders while retaining
 the specified 320-position sweep.
 
-For Martin and Scottie, R/G/B values map linearly from 0...255 to
+For Martin, Scottie, and Wraase, R/G/B values map linearly from 0...255 to
 1500...2300 Hz. Robot color components use the limited-range BT.601 equations
 published in the Dayton proposal:
 
@@ -111,6 +151,23 @@ Specifications](https://www.classicsstv.com/downloads/daytonpaper.pdf), Dayton
 SSTV Forum, 20 May 2000. The Robot chroma storage pattern is cross-checked
 against Olga Miller's Apache-2.0 SSTV Encoder 2; no source is copied.
 
+### 4.4 Receiver and HF Fax boundary
+
+The receive core will remain in Foundation-only `SSTVKit`. It accepts mono
+floating-point PCM chunks and owns demodulation, VIS recognition, line timing,
+mode selection, and progressive raster assembly. AVFoundation capture and
+audio-file conversion remain app adapters. Synthetic encode-to-decode tests
+must pass before microphone UI is enabled.
+
+Automatic mode selection applies to valid VIS modes. A fallback may suggest a
+mode from repeated 5/9/20 ms sync pulses and measured line duration, but it
+must identify that result as timing-derived rather than VIS-confirmed.
+
+The contributed HF Fax receiver profile is IOC 576 at 120 lines per minute:
+one grayscale radio line every 500 ms and a final display width of 1808
+samples. It has no VIS code. It is selected manually and kept outside
+`SSTVMode` so fixed-height SSTV assumptions do not leak into radiofax.
+
 ## 5. SSTVKit components
 
 ### `RGBPixel` and `RGBImage`
@@ -120,9 +177,10 @@ row-major 8-bit RGB pixels.
 
 ### `SSTVMode`
 
-Owns immutable public metadata: display name, VIS code, raster dimensions,
-line duration, picture duration, and total duration. Mode-specific line layout
-is centralized in one internal strategy.
+Owns immutable public metadata: family, display name, VIS code, raster
+dimensions, radio-line count, line duration, picture duration, and total
+duration. PD modes explicitly expose half as many radio lines as raster rows.
+Mode-specific line layout is centralized in one internal strategy.
 
 ### `SSTVEncoder`
 
@@ -146,8 +204,9 @@ pinch-to-zoom, drag-to-position, and reset. Blank area is prevented by clamping
 the transform to the aspect-fill bounds.
 
 The preview and RGB bytes come from the same prepared bitmap. Changing the
-photo, mode, zoom, or crop position invalidates any prior encoding. Martin and
-Scottie prepare 320x256; Robot modes prepare 320x240.
+photo, mode, zoom, or crop position invalidates any prior encoding. Martin,
+Scottie, and Wraase prepare 320x256; Robot modes prepare 320x240. PD modes
+prepare their published 320x256, 512x400, 640x496, or 800x616 raster.
 
 `PhotosPicker` loads user-selected data without requesting broad photo-library
 access.
@@ -180,11 +239,13 @@ Tests are written before their corresponding implementation.
 
 `SSTVKitTests` cover:
 
-- all mode dimensions, VIS codes, line times, and total sample counts;
+- all mode dimensions, VIS codes, radio-line counts, line times, and total
+  sample counts;
 - VIS LSB-first bit order and even parity;
 - cumulative sample rounding and continuous oscillator phase;
 - RGB and BT.601 component-to-frequency mapping;
-- Martin and Scottie channel/line ordering;
+- Martin, Scottie, and Wraase channel/line ordering;
+- PD two-row ordering and vertical chroma averaging;
 - Robot 36 separator alternation and 2x2 chroma averaging;
 - Robot 72 component order and horizontal chroma averaging;
 - deterministic output and cooperative cancellation;
@@ -227,3 +288,11 @@ Version 1 is complete only when:
   minimum-iOS, and unsigned-state checks;
 - the final repository URL, commit SHA, Actions run URL, job conclusions, and
   IPA name/hash/size are recorded for delivery.
+
+The encoder expansion is complete when all 15 VIS modes reproduce the mode
+tables' exact line layout and 48 kHz cumulative sample count in CI. The receive
+phase is complete only after deterministic chunk-boundary, noisy-header,
+frequency-offset, mode-switch, encode/decode round-trip, cancellation, audio
+file, microphone lifecycle, privacy-string, and HF Fax tests pass. Actual RF
+reception remains a separate real-device validation and is never inferred from
+simulator or synthetic CI results.
