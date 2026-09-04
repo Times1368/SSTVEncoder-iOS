@@ -1,6 +1,6 @@
 # SSTVEncoder-iOS design
 
-Status: version 1 shipped; expanded encoding and receiving roadmap approved
+Status: version 1 encoder shipped; version 1.1 receiver implemented pending CI and device validation
 
 Date: 2026-09-04
 
@@ -15,14 +15,13 @@ The expanded encoder adds PD 50/90/120/160/180/240/290, Martin M2, Scottie
 S2/DX, and Wraase SC2-180. These are the 15 VIS-identified color modes exposed
 by the first encoder expansion.
 
-Receiving is a separate phase. It will add automatic VIS detection and
-progressive decoding for the same 15 modes, with both imported audio and an
-explicitly started live microphone input. The microphone is never used by the
-encoder and will only be requested when the user starts receiving. Raw input
-audio is processed in memory rather than retained. The receiver will also
-offer a manually selected `Contrib / HF Fax` profile. `Contrib` is a category
-label used by Robot36, not an SSTV mode; HF Fax has no VIS header and therefore
-cannot be selected by VIS auto-detection.
+Version 1.1 adds automatic VIS detection and progressive decoding for the same
+15 modes, with both imported audio and an explicitly started live microphone
+input. The microphone is never used by the encoder and is requested only when
+the user starts receiving. Raw input audio is processed in memory rather than
+retained. The receiver also offers a manually selected `Contrib / HF Fax`
+profile. `Contrib` is a category label used by Robot36, not an SSTV mode; HF
+Fax has no VIS header and therefore cannot be selected by VIS auto-detection.
 
 No phase contains PTT, CAT, rig control, Radio Lite networking, background
 transmission, accounts, analytics, or cloud storage. Playing generated audio
@@ -153,11 +152,11 @@ against Olga Miller's Apache-2.0 SSTV Encoder 2; no source is copied.
 
 ### 4.4 Receiver and HF Fax boundary
 
-The receive core will remain in Foundation-only `SSTVKit`. It accepts mono
-floating-point PCM chunks and owns demodulation, VIS recognition, line timing,
-mode selection, and progressive raster assembly. AVFoundation capture and
-audio-file conversion remain app adapters. Synthetic encode-to-decode tests
-must pass before microphone UI is enabled.
+The receive core remains in Foundation-only `SSTVKit`. It accepts mono
+floating-point PCM chunks and owns stateful quadrature FM demodulation, VIS
+recognition, frequency-offset tracking, line synchronization, mode selection,
+and progressive raster assembly. AVFoundation capture and audio-file
+conversion remain app adapters. Synthetic encode-to-decode tests gate the IPA.
 
 Automatic mode selection applies to valid VIS modes. A fallback may suggest a
 mode from repeated 5/9/20 ms sync pulses and measured line duration, but it
@@ -196,6 +195,21 @@ Quantizes the encoded float samples to signed 16-bit PCM with saturation and
 writes an ordinary little-endian RIFF/WAVE file. Playback and export consume
 the same `PCMBuffer`; the signal is never synthesized twice.
 
+### `SSTVDecoder` and `SSTVStreamDecoder`
+
+`SSTVDecoder` decodes a complete `PCMBuffer`; `SSTVStreamDecoder` preserves its
+oscillator, filter, header-search, synchronization, and partial-raster state
+across arbitrary chunks. Both use the same VIS and five-family line assembler.
+The stream returns immutable progressive frames and checks cooperative
+cancellation between chunks and scan lines.
+
+### `HFFaxAssembler`
+
+The manual IOC 576 / 120 LPM path consumes one 500 ms grayscale line at a time,
+outputs 1808 horizontal pixels, and uses a decaying brightness profile to align
+the repeated white margin after enough lines are present. It never participates
+in VIS auto-detection.
+
 ## 6. Image preparation and crop UI
 
 The selected `UIImage` is orientation-normalized and rendered into the active
@@ -213,7 +227,7 @@ access.
 
 ## 7. App state and user flow
 
-The main screen is a single guided flow:
+The send tab retains the guided flow:
 
 ```text
 Choose photo
@@ -230,8 +244,13 @@ superseded work from publishing a stale result.
 
 Playback uses an `AVAudioSession` in `.playback` mode and `AVAudioPlayer` over
 WAV data made from the current buffer. Interruptions, route invalidation, and
-media service reset stop playback and deactivate the session. No microphone
-permission is present.
+media service reset stop playback and deactivate the session.
+
+The receive tab offers automatic VIS, manual selection for every supported
+SSTV mode, and manual `Contrib / HF Fax`. The user can import a system-readable
+audio file or explicitly start an `AVAudioEngine` microphone stream. Progressive
+images remain exportable as PNG after stopping. Microphone permission is not
+requested from the send tab or at app launch, and captured PCM is not retained.
 
 ## 8. Tests and quality gates
 
@@ -291,8 +310,8 @@ Version 1 is complete only when:
 
 The encoder expansion is complete when all 15 VIS modes reproduce the mode
 tables' exact line layout and 48 kHz cumulative sample count in CI. The receive
-phase is complete only after deterministic chunk-boundary, noisy-header,
-frequency-offset, mode-switch, encode/decode round-trip, cancellation, audio
-file, microphone lifecycle, privacy-string, and HF Fax tests pass. Actual RF
-reception remains a separate real-device validation and is never inferred from
-simulator or synthetic CI results.
+implementation is eligible for release only after deterministic chunk-boundary,
+noisy-header, frequency-offset, mode-switch, encode/decode round-trip,
+cancellation, audio-file, microphone lifecycle, privacy-string, and HF Fax
+tests pass in Actions. Actual RF reception remains a separate real-device
+validation and is never inferred from simulator or synthetic CI results.

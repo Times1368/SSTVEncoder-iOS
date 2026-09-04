@@ -1,6 +1,6 @@
 import Foundation
 
-struct SSTVFrameAssembler: Sendable {
+final class SSTVFrameAssembler {
     let mode: SSTVMode
     let detectionSource: SSTVDetectionSource
     let sampleRate: Int
@@ -20,6 +20,7 @@ struct SSTVFrameAssembler: Sendable {
         mode: SSTVMode,
         detectionSource: SSTVDetectionSource,
         pictureStartSample: Int,
+        firstLineStartSample: Int? = nil,
         sampleRate: Int,
         latencySamples: Int,
         frequencyOffsetHz: Double
@@ -29,8 +30,10 @@ struct SSTVFrameAssembler: Sendable {
         self.sampleRate = sampleRate
         self.latencySamples = latencySamples
         self.frequencyOffsetHz = frequencyOffsetHz
-        initialLineStart = pictureStartSample
-            + Int((mode.framePrefixDuration * Double(sampleRate)).rounded())
+        initialLineStart = firstLineStartSample ?? (
+            pictureStartSample
+                + Int((mode.framePrefixDuration * Double(sampleRate)).rounded())
+        )
         pixels = Array(repeating: .black, count: mode.width * mode.height)
     }
 
@@ -38,7 +41,7 @@ struct SSTVFrameAssembler: Sendable {
         completedRows >= mode.height
     }
 
-    mutating func decodeAvailable(frequencies: [Float]) throws -> Bool {
+    func decodeAvailable(frequencies: [Float]) throws -> Bool {
         let sampler = SSTVToneSampler(
             frequencies: frequencies,
             sampleRate: sampleRate,
@@ -130,7 +133,7 @@ struct SSTVFrameAssembler: Sendable {
         }
     }
 
-    private mutating func decode(
+    private func decode(
         scanLine: Int,
         lineStart: Int,
         sampler: SSTVToneSampler
@@ -151,7 +154,7 @@ struct SSTVFrameAssembler: Sendable {
         }
     }
 
-    private mutating func decodeRobot36(
+    private func decodeRobot36(
         scanLine: Int,
         lineStart: Int,
         sampler: SSTVToneSampler
@@ -212,7 +215,7 @@ struct SSTVFrameAssembler: Sendable {
         completedRows = max(completedRows, min(mode.height, scanLine + 1))
     }
 
-    private mutating func decodeRobot72(
+    private func decodeRobot72(
         row: Int,
         lineStart: Int,
         sampler: SSTVToneSampler
@@ -251,7 +254,7 @@ struct SSTVFrameAssembler: Sendable {
         completedRows = max(completedRows, min(mode.height, row + 1))
     }
 
-    private mutating func decodePD(
+    private func decodePD(
         scanLine: Int,
         lineStart: Int,
         sampler: SSTVToneSampler
@@ -307,7 +310,7 @@ struct SSTVFrameAssembler: Sendable {
         completedRows = max(completedRows, min(mode.height, secondRow + 1))
     }
 
-    private mutating func decodeMartin(
+    private func decodeMartin(
         row: Int,
         lineStart: Int,
         sampler: SSTVToneSampler
@@ -326,7 +329,7 @@ struct SSTVFrameAssembler: Sendable {
         )
     }
 
-    private mutating func decodeScottie(
+    private func decodeScottie(
         row: Int,
         lineStart: Int,
         sampler: SSTVToneSampler
@@ -345,7 +348,7 @@ struct SSTVFrameAssembler: Sendable {
         )
     }
 
-    private mutating func decodeWraase(
+    private func decodeWraase(
         row: Int,
         lineStart: Int,
         sampler: SSTVToneSampler
@@ -364,7 +367,7 @@ struct SSTVFrameAssembler: Sendable {
         )
     }
 
-    private mutating func decodeRGBRow(
+    private func decodeRGBRow(
         row: Int,
         redStart: Int,
         greenStart: Int,

@@ -16,8 +16,8 @@ from typing import Iterable, Sequence
 
 
 EXPECTED_BUNDLE_ID = "io.github.times1368.sstvencoder"
-EXPECTED_MARKETING_VERSION = "1.0.0"
-EXPECTED_BUILD_VERSION = "1"
+EXPECTED_MARKETING_VERSION = "1.1.0"
+EXPECTED_BUILD_VERSION = "2"
 EXPECTED_IOS_VERSION = "17.0"
 EXPECTED_SWIFT_TOOLS_VERSION = "5.9"
 
@@ -179,11 +179,11 @@ class ContractValidator:
             ),
             (
                 rf"^\s*MARKETING_VERSION:\s*[\"']?{re.escape(EXPECTED_MARKETING_VERSION)}[\"']?\s*$",
-                "marketing version must be 1.0.0",
+                f"marketing version must be {EXPECTED_MARKETING_VERSION}",
             ),
             (
                 rf"^\s*CURRENT_PROJECT_VERSION:\s*[\"']?{EXPECTED_BUILD_VERSION}[\"']?\s*$",
-                "build version must be 1",
+                f"build version must be {EXPECTED_BUILD_VERSION}",
             ),
             (r"^\s{2}SSTVEncoder:\s*$", "XcodeGen must define the SSTVEncoder target"),
             (r"^\s+type:\s*application\s*$", "SSTVEncoder must be an application target"),
@@ -261,8 +261,6 @@ class ContractValidator:
             (r"\bURLSession\b", "URLSession networking API"),
             (r"\bNW(?:Connection|Listener|PathMonitor|Browser)\b", "Network.framework API"),
             (r"\bwebSocketTask\b|\bWebSocket\b", "WebSocket API"),
-            (r"\bAVAudioRecorder\b|\brequestRecordPermission\b", "microphone recording API"),
-            (r"\.inputNode\b|\.playAndRecord\b|\.record\b", "audio-input category/API"),
             (r"\b(?:PTT|PushToTalk)\b", "PTT API or coupling"),
         )
         for path, text in app_texts:
@@ -271,6 +269,34 @@ class ContractValidator:
                 if match:
                     line = text.count("\n", 0, match.start()) + 1
                     self.fail(f"{self.relative(path)}:{line} contains forbidden {label}")
+
+        microphone_source = self.require_file(
+            "SSTVEncoder/Core/MicrophoneReceiver.swift"
+        )
+        microphone_patterns = (
+            r"\brequestRecordPermission\b",
+            r"\.inputNode\b",
+            r"\.record\b",
+        )
+        for path, text in app_texts:
+            for pattern in microphone_patterns:
+                if re.search(pattern, text, re.MULTILINE | re.IGNORECASE):
+                    if microphone_source is None or path.resolve() != microphone_source.resolve():
+                        self.fail(
+                            f"{self.relative(path)} contains microphone access outside "
+                            "the explicit receive adapter"
+                        )
+
+        microphone_text = self.read_text(
+            "SSTVEncoder/Core/MicrophoneReceiver.swift"
+        )
+        if microphone_text:
+            for pattern, message in (
+                (r"AVAudioApplication\.requestRecordPermission", "receiver must request microphone permission explicitly"),
+                (r"\.inputNode\b", "receiver must use AVAudioEngine inputNode"),
+                (r"func\s+stop\s*\(", "receiver must expose deterministic microphone cleanup"),
+            ):
+                self.require_regex(microphone_text, pattern, message)
 
         app_combined = "\n".join(text for _, text in app_texts)
         if not re.search(r"\b48_?000(?:\.0)?\b", app_combined):
@@ -282,7 +308,7 @@ class ContractValidator:
             if path.is_file() and path.suffix.lower() in {".plist", ".entitlements", ".yml", ".yaml"}
         )
         forbidden_metadata = re.compile(
-            r"NSMicrophoneUsageDescription|NSLocalNetworkUsageDescription|NSBonjourServices|"
+            r"NSLocalNetworkUsageDescription|NSBonjourServices|"
             r"com\.apple\.developer\.networking|com\.apple\.developer\.push-to-talk|"
             r"aps-environment",
             re.IGNORECASE,
@@ -297,8 +323,21 @@ class ContractValidator:
             if match:
                 line = text.count("\n", 0, match.start()) + 1
                 self.fail(
-                    f"{self.relative(path)}:{line} contains forbidden microphone/network/PTT metadata"
+                    f"{self.relative(path)}:{line} contains forbidden network/PTT metadata"
                 )
+
+        info_plist = self.read_text("SSTVEncoder/App/Info.plist")
+        self.require_regex(
+            info_plist,
+            r"<key>NSMicrophoneUsageDescription</key>\s*<string>[^<]+</string>",
+            "Info.plist must explain microphone use for explicit receiving",
+            flags=re.MULTILINE | re.DOTALL,
+        )
+        self.require_regex(
+            project,
+            r"^\s*NSMicrophoneUsageDescription:\s*\S.+$",
+            "XcodeGen must preserve the microphone privacy string",
+        )
 
     def validate_app_icon(self) -> None:
         generator = self.read_text("scripts/generate_app_icon.py")
@@ -421,7 +460,7 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     print(
         "Contract validation passed: iOS 17 / Swift tools 5.9, local SSTVKit boundary, "
-        "48 kHz Int16 WAV path, generated AppIcon, no network/microphone/PTT coupling, "
+        "48 kHz Int16 WAV path, explicit receive-only microphone privacy, no network/PTT coupling, "
         "and gated unsigned IPA CI."
     )
     return 0

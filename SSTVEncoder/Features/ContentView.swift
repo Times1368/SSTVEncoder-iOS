@@ -6,6 +6,23 @@ import UniformTypeIdentifiers
 
 @MainActor
 struct ContentView: View {
+    var body: some View {
+        TabView {
+            EncoderView()
+                .tabItem {
+                    Label("编码", systemImage: "waveform.badge.plus")
+                }
+
+            ReceiveView()
+                .tabItem {
+                    Label("解码", systemImage: "dot.radiowaves.left.and.right")
+                }
+        }
+    }
+}
+
+@MainActor
+private struct EncoderView: View {
     @StateObject private var viewModel = EncoderViewModel()
     @StateObject private var playback = PlaybackController()
     @State private var pickerItem: PhotosPickerItem?
@@ -29,7 +46,7 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity)
             }
             .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("SSTV 编码器")
+            .navigationTitle("SSTV 编码")
         }
         .onChange(of: pickerItem) { _, newItem in
             startPhotoLoad(newItem)

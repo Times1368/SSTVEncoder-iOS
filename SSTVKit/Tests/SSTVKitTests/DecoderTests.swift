@@ -93,6 +93,28 @@ final class DecoderTests: XCTestCase {
         XCTAssertFalse(frame.isComplete)
     }
 
+    func testManualModeCanLockFromLineTimingWhenVISIsMissing() async throws {
+        let sampleRate = 12_000
+        let mode = SSTVMode.robot36Color
+        let encoder = try SSTVEncoder(sampleRate: sampleRate, amplitude: 0.8)
+        let signal = try await encoder.encode(
+            solidImage(for: mode, pixel: .blue),
+            mode: mode
+        )
+        let headerSamples = Int((SSTVHeader.duration * Double(sampleRate)).rounded())
+        let body = try PCMBuffer(
+            sampleRate: sampleRate,
+            samples: Array(signal.samples.dropFirst(headerSamples))
+        )
+        let decoder = try SSTVDecoder(sampleRate: sampleRate)
+
+        let frame = try await decoder.decode(body, selection: .mode(mode))
+
+        XCTAssertEqual(frame.mode, .sstv(mode))
+        XCTAssertEqual(frame.detectionSource, .timing)
+        XCTAssertTrue(frame.isComplete)
+    }
+
     func testDecodeObservesTaskCancellation() async throws {
         let sampleRate = 12_000
         let mode = SSTVMode.robot36Color

@@ -1,6 +1,6 @@
 # SSTVEncoder-iOS implementation plan
 
-Status: version 1 complete; encoder expansion active; receiver follows
+Status: encoder expansion complete; receiver implemented locally, CI and real-device validation pending
 
 ## Encoder expansion - 15 VIS modes
 
@@ -39,7 +39,7 @@ return the Actions run URL without waiting, as required for this Windows host.
 
 ## Receiver phase - automatic SSTV plus Contrib / HF Fax
 
-### Commit D - Add failing decoder-core specifications
+### Commit D - Add failing decoder-core specifications — complete
 
 - Specify streaming PCM input, chunk-boundary invariance, VIS LSB/parity
   validation, frequency offset, cancellation, and progressive image updates.
@@ -47,7 +47,7 @@ return the Actions run URL without waiting, as required for this Windows host.
   family, plus noise and truncated-input cases.
 - Specify that VIS-confirmed and timing-inferred detections are distinct.
 
-### Commit E - Implement the reusable decoder core
+### Commit E - Implement the reusable decoder core — complete locally
 
 - Add Foundation-only FM demodulation, tone classification, header detection,
   line synchronization, per-family color reconstruction, and auto-mode state.
@@ -55,7 +55,7 @@ return the Actions run URL without waiting, as required for this Windows host.
 - Add a manual IOC 576 / 120 LPM grayscale HF Fax profile outside
   `SSTVMode`; it cannot be VIS-auto-selected.
 
-### Commit F - Add receive UI and audio adapters
+### Commit F - Add receive UI and audio adapters — complete locally
 
 - Add imported-audio decoding and an explicitly started AVAudioEngine
   microphone session with progressive preview, stop/reset, and image export.
@@ -63,10 +63,10 @@ return the Actions run URL without waiting, as required for this Windows host.
   string and an in-app explanation that raw audio is not retained.
 - Do not add networking, PTT, CAT, or any automatic transmit path.
 
-Gate: both macOS SwiftPM suites, iOS simulator lifecycle tests, unsigned device
-build, IPA verification, and source privacy/security contracts pass in Actions.
-Real-device microphone and over-the-air reception are reported separately and
-never claimed from CI.
+Gate status: Windows source privacy/security contracts pass. macOS SwiftPM,
+iOS simulator compilation/tests, unsigned device build, and IPA verification
+remain pending until the commit is pushed to Actions. Real-device microphone
+and over-the-air reception are reported separately and never claimed from CI.
 
 ## Commit 1 - Lock design and boundaries
 

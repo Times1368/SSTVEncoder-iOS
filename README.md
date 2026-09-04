@@ -1,8 +1,9 @@
 # SSTVEncoder-iOS
 
-SSTVEncoder-iOS is an independent SwiftUI app that turns a photo into
-standards-compatible SSTV audio entirely on the iPhone or iPad. Its encoder is
-also available as the reusable, Foundation-only `SSTVKit` Swift package.
+SSTVEncoder-iOS is an independent SwiftUI app that encodes photos to SSTV audio
+and decodes SSTV recordings or live microphone input entirely on the iPhone or
+iPad. Both directions are provided by the reusable, Foundation-only `SSTVKit`
+Swift package.
 
 The encoder supports 15 VIS modes:
 
@@ -16,6 +17,17 @@ The encoder supports 15 VIS modes:
 The complete local flow is photo selection, interactive crop/scale, exact
 encoded-raster preview, encoding with progress and cancellation, on-device
 playback, and export of the same signal as a 48 kHz mono signed 16-bit PCM WAV.
+
+The receiver provides:
+
+- automatic VIS detection and progressive decoding for the same 15 modes;
+- manual selection for damaged or missing VIS headers;
+- audio import using every format supported by `AVAudioFile`, including WAV,
+  MP3, M4A, AIFF, and CAF where available on the device;
+- explicitly started live microphone reception, with no raw-audio retention;
+- local PNG export of complete or partial decoded images; and
+- a separate manual `Contrib / HF Fax` receiver for IOC 576 at 120 LPM. HF Fax
+  has no VIS and produces an 1808-pixel-wide progressive grayscale image.
 
 ## Requirements
 
@@ -51,7 +63,7 @@ assets are ignored by Git and recreated by CI.
 
 ## Tests
 
-Run the portable encoder tests on macOS:
+Run the portable encoder and decoder tests on macOS:
 
 ```sh
 swift test --package-path SSTVKit --parallel
@@ -59,7 +71,9 @@ swift test --package-path SSTVKit --parallel
 
 GitHub Actions also generates the Xcode project and runs the app tests on an
 iOS 17 simulator with Xcode 15.0.1, repeats tests with Xcode 16.4, then builds
-for `generic/platform=iOS`. Packaging is gated on both test jobs.
+for `generic/platform=iOS`. Synthetic encode-to-decode, streaming chunk,
+VIS/parity/frequency-offset, cancellation, partial-image, and HF Fax tests run
+before packaging. Packaging is gated on both test jobs.
 
 ## Unsigned IPA artifact
 
@@ -75,17 +89,22 @@ distributing it.
 
 ## Safety and scope
 
-The current app release only creates, plays, and exports audio. It contains no
-radio control, CAT, PTT, remote server, network client, microphone capture,
-Hamlib, FT8/FT4, or automatic transmission path. Playing the audio into radio
-equipment is a separate operator action outside this project.
+The app contains no radio control, CAT, PTT, remote server, network client,
+Hamlib, FT8/FT4, or automatic transmission path. Playing generated audio into
+radio equipment remains a separate operator action outside this project.
 
-Automatic VIS decoding is the next phase. It will support imported audio and
-an explicitly started microphone receiver for the same 15 modes. Robot36's
-`Contrib` label is a category rather than a modulation; its current HF Fax
-entry will be implemented as a separate, manually selected IOC 576 / 120 LPM
-receiver because radiofax has no VIS header. No microphone permission is added
-until that receive phase is implemented and tested.
+Microphone permission is requested only after the user taps **启动麦克风** on
+the receive tab. Captured PCM is streamed directly to the in-memory decoder and
+is neither saved nor uploaded. Switching modes or stopping reception cancels
+the current decoder and releases the audio session.
+
+`Contrib` is Robot36's category label rather than a modulation. The app exposes
+the contributed HF Fax implementation as a separate manual IOC 576 / 120 LPM
+profile because radiofax carries no VIS header and cannot be auto-selected.
+
+CI verifies deterministic synthetic signals and simulator lifecycle behavior;
+it does not prove reception quality from a particular radio, acoustic path, or
+iPhone microphone. Those remain explicit real-device tests.
 
 See [the design](docs/design.md) for protocol timing and architecture, and
 [the implementation plan](docs/implementation-plan.md) for the TDD and release

@@ -135,7 +135,7 @@ struct SSTVToneSampler {
         let exactEnd = Double(scanStart)
             + scanDuration * Double(sampleRate) * Double(pixel + 1) / Double(width)
         let center = (exactStart + exactEnd) / 2
-        let halfWindow = max(1, Int(((exactEnd - exactStart) * 0.3).rounded()))
+        let halfWindow = max(2, Int(((exactEnd - exactStart) * 0.3).rounded()))
         let start = Int(center.rounded()) - halfWindow
         let end = Int(center.rounded()) + halfWindow + 1
         guard let frequency = mean(

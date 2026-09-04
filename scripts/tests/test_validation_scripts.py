@@ -68,9 +68,9 @@ def write_fixture(
             "CFBundleExecutable": "SSTVEncoder",
             "CFBundleIdentifier": "io.github.times1368.sstvencoder",
             "CFBundlePackageType": "APPL",
-            "CFBundleShortVersionString": "1.0.0",
+            "CFBundleShortVersionString": "1.1.0",
             "CFBundleSupportedPlatforms": ["iPhoneOS"],
-            "CFBundleVersion": "1",
+            "CFBundleVersion": "2",
             "DTPlatformName": "iphoneos",
             "MinimumOSVersion": "17.0",
         },
@@ -101,8 +101,8 @@ class IPAValidationTests(unittest.TestCase):
         self.expectations = Expectations(
             app_name="SSTVEncoder",
             bundle_id="io.github.times1368.sstvencoder",
-            marketing_version="1.0.0",
-            build_version="1",
+            marketing_version="1.1.0",
+            build_version="2",
             minimum_os="17.0",
         )
 
@@ -257,9 +257,10 @@ targets:
       base:
         SWIFT_VERSION: "5.0"
         PRODUCT_BUNDLE_IDENTIFIER: io.github.times1368.sstvencoder
-        MARKETING_VERSION: 1.0.0
-        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 1.1.0
+        CURRENT_PROJECT_VERSION: 2
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        NSMicrophoneUsageDescription: Decode SSTV only after an explicit start.
     dependencies:
       - package: SSTVKit
   SSTVEncoderTests:
@@ -281,6 +282,19 @@ targets:
         )
         (self.root / "SSTVEncoder" / "App" / "App.swift").write_text(
             "let requiredSampleRate = 48_000\n", encoding="utf-8"
+        )
+        (self.root / "SSTVEncoder" / "Core").mkdir(parents=True)
+        (self.root / "SSTVEncoder" / "Core" / "MicrophoneReceiver.swift").write_text(
+            "AVAudioApplication.requestRecordPermission { _ in }\n"
+            "let input = engine.inputNode\n"
+            "let category = AVAudioSession.Category.record\n"
+            "func stop() {}\n",
+            encoding="utf-8",
+        )
+        (self.root / "SSTVEncoder" / "App" / "Info.plist").write_text(
+            "<plist><dict><key>NSMicrophoneUsageDescription</key>"
+            "<string>Decode SSTV after an explicit start.</string></dict></plist>\n",
+            encoding="utf-8",
         )
 
     def test_swift_5_language_mode_and_nested_deployment_target_pass(self) -> None:
@@ -331,6 +345,23 @@ targets:
         self.assertTrue(
             any("directly depend" in error for error in validator.errors)
         )
+
+    def test_microphone_permission_and_adapter_are_required(self) -> None:
+        info = self.root / "SSTVEncoder" / "App" / "Info.plist"
+        info.write_text("<plist><dict/></plist>\n", encoding="utf-8")
+        validator = ContractValidator(self.root)
+        validator.validate_xcodegen_project()
+        self.assertTrue(any("microphone" in error.lower() for error in validator.errors))
+
+    def test_microphone_access_outside_receive_adapter_is_rejected(self) -> None:
+        app = self.root / "SSTVEncoder" / "App" / "App.swift"
+        app.write_text(
+            "let requiredSampleRate = 48_000\nlet input = engine.inputNode\n",
+            encoding="utf-8",
+        )
+        validator = ContractValidator(self.root)
+        validator.validate_xcodegen_project()
+        self.assertTrue(any("outside" in error for error in validator.errors))
 
 
 if __name__ == "__main__":

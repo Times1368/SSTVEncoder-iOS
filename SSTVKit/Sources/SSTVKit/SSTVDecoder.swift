@@ -36,9 +36,8 @@ public actor SSTVStreamDecoder {
         guard !samples.isEmpty else { return nil }
         frequencies.append(contentsOf: demodulator.process(samples))
 
-        if var faxAssembler {
+        if let faxAssembler {
             let changed = try faxAssembler.decodeAvailable(frequencies: frequencies)
-            self.faxAssembler = faxAssembler
             return changed ? try faxAssembler.snapshot() : nil
         }
 
@@ -46,9 +45,8 @@ public actor SSTVStreamDecoder {
             detectHeaderIfAvailable()
         }
 
-        if var frameAssembler {
+        if let frameAssembler {
             let changed = try frameAssembler.decodeAvailable(frequencies: frequencies)
-            self.frameAssembler = frameAssembler
             return changed ? try frameAssembler.snapshot() : nil
         }
 
@@ -65,20 +63,18 @@ public actor SSTVStreamDecoder {
             ))
         }
 
-        if var faxAssembler {
+        if let faxAssembler {
             _ = try faxAssembler.decodeAvailable(frequencies: frequencies)
-            self.faxAssembler = faxAssembler
             return try faxAssembler.snapshot()
         }
 
         if frameAssembler == nil {
             detectHeaderIfAvailable()
         }
-        guard var frameAssembler else {
+        guard let frameAssembler else {
             throw SSTVDecodeError.headerNotFound
         }
         _ = try frameAssembler.decodeAvailable(frequencies: frequencies)
-        self.frameAssembler = frameAssembler
         guard frameAssembler.completedRows > 0 else {
             throw SSTVDecodeError.noImageData
         }
@@ -86,47 +82,72 @@ public actor SSTVStreamDecoder {
     }
 
     private func detectHeaderIfAvailable() {
-        guard let detection = SSTVHeaderDetector.detect(
+        if let detection = SSTVHeaderDetector.detect(
             frequencies: frequencies,
             sampleRate: sampleRate,
             latencySamples: demodulator.latencySamples,
             searchStart: headerSearchStart
-        ) else {
-            let available = max(0, frequencies.count - demodulator.latencySamples)
-            let overlap = Int((0.02 * Double(sampleRate)).rounded())
-            let headerSamples = Int((0.905 * Double(sampleRate)).rounded())
-            headerSearchStart = max(
-                headerSearchStart,
-                available - headerSamples - overlap
+        ) {
+            let mode: SSTVMode
+            let source: SSTVDetectionSource
+            switch selection {
+            case .automatic:
+                mode = detection.mode
+                source = .vis
+            case let .mode(selectedMode):
+                mode = selectedMode
+                source = .manual
+            case .hfFax:
+                return
+            }
+
+            let pictureStart = detection.pictureStartSample
+            if pictureStart > 0, pictureStart <= frequencies.count {
+                frequencies.removeFirst(pictureStart)
+            }
+            headerSearchStart = 0
+            frameAssembler = SSTVFrameAssembler(
+                mode: mode,
+                detectionSource: source,
+                pictureStartSample: 0,
+                sampleRate: sampleRate,
+                latencySamples: demodulator.latencySamples,
+                frequencyOffsetHz: detection.frequencyOffsetHz
             )
             return
         }
 
-        let mode: SSTVMode
-        let source: SSTVDetectionSource
-        switch selection {
-        case .automatic:
-            mode = detection.mode
-            source = .vis
-        case let .mode(selectedMode):
-            mode = selectedMode
-            source = .manual
-        case .hfFax:
+        if case let .mode(mode) = selection,
+           let timing = SSTVTimingDetector.detect(
+               frequencies: frequencies,
+               sampleRate: sampleRate,
+               latencySamples: demodulator.latencySamples,
+               mode: mode,
+               searchStart: 0
+           ) {
+            let firstLineStart = timing.firstLineStartSample
+            if firstLineStart > 0, firstLineStart <= frequencies.count {
+                frequencies.removeFirst(firstLineStart)
+            }
+            headerSearchStart = 0
+            frameAssembler = SSTVFrameAssembler(
+                mode: mode,
+                detectionSource: .timing,
+                pictureStartSample: 0,
+                firstLineStartSample: 0,
+                sampleRate: sampleRate,
+                latencySamples: demodulator.latencySamples,
+                frequencyOffsetHz: timing.frequencyOffsetHz
+            )
             return
         }
 
-        let pictureStart = detection.pictureStartSample
-        if pictureStart > 0, pictureStart <= frequencies.count {
-            frequencies.removeFirst(pictureStart)
-        }
-        headerSearchStart = 0
-        frameAssembler = SSTVFrameAssembler(
-            mode: mode,
-            detectionSource: source,
-            pictureStartSample: 0,
-            sampleRate: sampleRate,
-            latencySamples: demodulator.latencySamples,
-            frequencyOffsetHz: detection.frequencyOffsetHz
+        let available = max(0, frequencies.count - demodulator.latencySamples)
+        let overlap = Int((0.02 * Double(sampleRate)).rounded())
+        let headerSamples = Int((0.905 * Double(sampleRate)).rounded())
+        headerSearchStart = max(
+            headerSearchStart,
+            available - headerSamples - overlap
         )
     }
 

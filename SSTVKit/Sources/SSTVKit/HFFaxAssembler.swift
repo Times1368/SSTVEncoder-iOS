@@ -1,6 +1,6 @@
 import Foundation
 
-struct HFFaxAssembler: Sendable {
+final class HFFaxAssembler {
     let profile: HFFaxProfile
     let sampleRate: Int
     let latencySamples: Int
@@ -19,7 +19,7 @@ struct HFFaxAssembler: Sendable {
     var completedRows: Int { rows.count }
     var isComplete: Bool { rows.count >= profile.maximumRows }
 
-    mutating func decodeAvailable(frequencies: [Float]) throws -> Bool {
+    func decodeAvailable(frequencies: [Float]) throws -> Bool {
         let sampler = SSTVToneSampler(
             frequencies: frequencies,
             sampleRate: sampleRate,
@@ -81,7 +81,7 @@ struct HFFaxAssembler: Sendable {
         )
     }
 
-    private mutating func updateHorizontalShiftIfStable() {
+    private func updateHorizontalShiftIfStable() {
         guard rows.count >= 20,
               let maximum = accumulatedBrightness.max(),
               maximum > 0 else { return }

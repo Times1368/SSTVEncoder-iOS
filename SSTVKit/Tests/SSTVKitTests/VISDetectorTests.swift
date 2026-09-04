@@ -15,10 +15,15 @@ final class VISDetectorTests: XCTestCase {
                     duration: segment.duration
                 )
             }
-            let buffer = try PCMBuffer(
-                sampleRate: sampleRate,
-                samples: Array(repeating: 0, count: leadingSilence) + writer.samples
-            )
+            var samples = Array(repeating: Float.zero, count: leadingSilence)
+                + writer.samples
+            var noiseState = UInt64(mode.visCode + 1)
+            for index in samples.indices {
+                noiseState = noiseState &* 6_364_136_223_846_793_005 &+ 1
+                let unit = Float((noiseState >> 40) & 0xFFFF) / Float(0xFFFF)
+                samples[index] += (unit * 2 - 1) * 0.015
+            }
+            let buffer = try PCMBuffer(sampleRate: sampleRate, samples: samples)
 
             let detection = try XCTUnwrap(SSTVHeaderDetector.detect(in: buffer), mode.displayName)
             XCTAssertEqual(detection.mode, mode)

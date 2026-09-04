@@ -22,6 +22,8 @@
     <true/>
     <key>MinimumOSVersion</key>
     <string>$(IPHONEOS_DEPLOYMENT_TARGET)</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>用于在您明确启动接收后解码 SSTV 或 HF Fax 音频；原始音频不会保存或上传。</string>
     <key>UILaunchScreen</key>
     <dict/>
     <key>UIApplicationSceneManifest</key>
