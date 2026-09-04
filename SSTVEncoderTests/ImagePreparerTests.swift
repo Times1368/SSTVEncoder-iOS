@@ -29,6 +29,8 @@ final class ImagePreparerTests: XCTestCase {
         XCTAssertEqual(prepared.raster.height, 240)
         XCTAssertEqual(prepared.raster[10, 10], .red)
         XCTAssertEqual(prepared.raster[10, 230], .blue)
+        XCTAssertEqual(previewPixel(in: prepared.preview, x: 10, y: 10), prepared.raster[10, 10])
+        XCTAssertEqual(previewPixel(in: prepared.preview, x: 10, y: 230), prepared.raster[10, 230])
     }
 
     func testModeChangeProducesTheExactMartinRasterSize() throws {
@@ -55,5 +57,23 @@ final class ImagePreparerTests: XCTestCase {
         XCTAssertEqual(prepared.raster.height, 256)
         XCTAssertEqual(prepared.raster[160, 128], .white)
     }
-}
 
+    private func previewPixel(in image: UIImage, x: Int, y: Int) -> RGBPixel? {
+        guard let cgImage = image.cgImage,
+              let data = cgImage.dataProvider?.data,
+              let bytes = CFDataGetBytePtr(data),
+              x >= 0,
+              y >= 0,
+              x < cgImage.width,
+              y < cgImage.height else {
+            return nil
+        }
+
+        let offset = y * cgImage.bytesPerRow + x * 4
+        return RGBPixel(
+            red: bytes[offset],
+            green: bytes[offset + 1],
+            blue: bytes[offset + 2]
+        )
+    }
+}

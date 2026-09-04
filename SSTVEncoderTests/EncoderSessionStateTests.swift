@@ -81,4 +81,19 @@ final class EncoderSessionStateTests: XCTestCase {
         XCTAssertTrue(state.updateProgress(0.25, for: currentGeneration))
         XCTAssertEqual(state.progress, 0.25, accuracy: 0.000_001)
     }
+
+    func testFailureFromAStaleGenerationCannotCancelCurrentEncoding() {
+        let state = EncoderSessionState<String>()
+        let staleGeneration = state.beginEncoding()
+        let currentGeneration = state.beginEncoding()
+
+        XCTAssertFalse(state.failEncoding(for: staleGeneration))
+        XCTAssertTrue(state.isEncoding)
+        XCTAssertEqual(state.progress, 0, accuracy: 0.000_001)
+
+        XCTAssertTrue(state.failEncoding(for: currentGeneration))
+        XCTAssertFalse(state.isEncoding)
+        XCTAssertNil(state.result)
+        XCTAssertEqual(state.progress, 0, accuracy: 0.000_001)
+    }
 }
