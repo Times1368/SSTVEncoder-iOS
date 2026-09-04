@@ -23,7 +23,11 @@ enum AudioFileLoader {
             options: .withoutChanges,
             error: &coordinationError
         ) { coordinatedURL in
-            result = Result { try readAudio(at: coordinatedURL) }
+            do {
+                result = .success(try readAudio(at: coordinatedURL))
+            } catch {
+                result = .failure(error)
+            }
         }
 
         if let coordinationError {
@@ -36,11 +40,9 @@ enum AudioFileLoader {
     }
 
     private static func readAudio(at url: URL) throws -> PCMBuffer {
-        let file = try AVAudioFile(
-            forReading: url,
-            commonFormat: .pcmFormatFloat32,
-            interleaved: false
-        )
+        // The convenience initializer exposes the standard deinterleaved
+        // Float32 processing format used by the mono conversion below.
+        let file = try AVAudioFile(forReading: url)
         let format = file.processingFormat
         let sampleRateValue = format.sampleRate
         let sampleRate = Int(sampleRateValue.rounded())
@@ -66,8 +68,12 @@ enum AudioFileLoader {
             throw AudioFileLoadingError.noPCMData
         }
 
-        while true {
-            try file.read(into: buffer, frameCount: frameCapacity)
+        while file.framePosition < file.length {
+            let remainingFrames = file.length - file.framePosition
+            let requestedFrames = AVAudioFrameCount(
+                min(AVAudioFramePosition(frameCapacity), remainingFrames)
+            )
+            try file.read(into: buffer, frameCount: requestedFrames)
             let frameLength = Int(buffer.frameLength)
             guard frameLength > 0 else { break }
             guard let channels = buffer.floatChannelData else {
