@@ -47,7 +47,24 @@ jobs:
           "$RUNNER_TEMP/app-icon-venv/bin/python" -m unittest discover -s scripts/tests -v
 
       - name: Run SSTVKit tests with SwiftPM
-        run: swift test --package-path SSTVKit --parallel
+        env:
+          SSTV_RECEIVE_QUALITY_OUTPUT: ${{ runner.temp }}/receive-quality-xcode15
+          SSTV_VERIFY_ENCODER_BASELINE: "1"
+        run: |
+          mkdir -p "$SSTV_RECEIVE_QUALITY_OUTPUT"
+          xcodebuild -version > "$SSTV_RECEIVE_QUALITY_OUTPUT/toolchain.txt"
+          swift --version >> "$SSTV_RECEIVE_QUALITY_OUTPUT/toolchain.txt"
+          printf 'commit=%s\nconfiguration=Release\n' "$GITHUB_SHA" >> "$SSTV_RECEIVE_QUALITY_OUTPUT/toolchain.txt"
+          swift test --package-path SSTVKit --configuration release --parallel
+
+      - name: Upload Swift 5.9 receive quality and encoder integrity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: receive-quality-xcode15-${{ github.sha }}
+          path: ${{ runner.temp }}/receive-quality-xcode15
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Install XcodeGen
         run: |
@@ -112,7 +129,23 @@ jobs:
           "$RUNNER_TEMP/app-icon-venv/bin/python" -m unittest discover -s scripts/tests -v
 
       - name: Run SSTVKit tests with SwiftPM
-        run: swift test --package-path SSTVKit --parallel
+        env:
+          SSTV_RECEIVE_QUALITY_OUTPUT: ${{ runner.temp }}/receive-quality-xcode16
+        run: |
+          mkdir -p "$SSTV_RECEIVE_QUALITY_OUTPUT"
+          xcodebuild -version > "$SSTV_RECEIVE_QUALITY_OUTPUT/toolchain.txt"
+          swift --version >> "$SSTV_RECEIVE_QUALITY_OUTPUT/toolchain.txt"
+          printf 'commit=%s\nconfiguration=Debug\n' "$GITHUB_SHA" >> "$SSTV_RECEIVE_QUALITY_OUTPUT/toolchain.txt"
+          swift test --package-path SSTVKit --parallel
+
+      - name: Upload current toolchain receive quality evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: receive-quality-xcode16-${{ github.sha }}
+          path: ${{ runner.temp }}/receive-quality-xcode16
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Install XcodeGen
         run: |

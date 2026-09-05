@@ -25,8 +25,8 @@ from typing import Any, Iterable, Sequence
 
 
 DEFAULT_BUNDLE_ID = "io.github.times1368.sstvencoder"
-DEFAULT_MARKETING_VERSION = "1.1.0"
-DEFAULT_BUILD_VERSION = "2"
+DEFAULT_MARKETING_VERSION = "1.1.1"
+DEFAULT_BUILD_VERSION = "3"
 DEFAULT_MINIMUM_OS = "17.0"
 DEFAULT_APP_NAME = "SSTVEncoder"
 

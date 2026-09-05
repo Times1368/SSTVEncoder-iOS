@@ -2,6 +2,43 @@ import XCTest
 @testable import SSTVKit
 
 final class FrequencyDemodulatorTests: XCTestCase {
+    func testShortPixelWindowsRecoverSteadyTonesWithoutColorRipple() throws {
+        for sampleRate in [6_000, 12_000, 44_100, 48_000] {
+            for tone in [1_200.0, 1_500, 1_700, 1_900, 2_137, 2_300] {
+                let samples = (0..<Int(Double(sampleRate) * 0.035)).map { index in
+                    Float(0.8 * sin(2 * Double.pi * tone * Double(index) / Double(sampleRate) + 0.37))
+                }
+                var demodulator = try SSTVFrequencyDemodulator(sampleRate: sampleRate)
+                let frequencies = demodulator.process(samples)
+                let sampler = SSTVToneSampler(
+                    frequencies: frequencies,
+                    sampleRate: sampleRate,
+                    latencySamples: demodulator.latencySamples
+                )
+                let width = max(3, Int((Double(sampleRate) * 0.00019).rounded()))
+                var maximumError = 0.0
+                for start in Int(Double(sampleRate) * 0.015)..<Int(Double(sampleRate) * 0.028) {
+                    let measured = try XCTUnwrap(sampler.mean(rawStart: start, rawEnd: start + width))
+                    maximumError = max(maximumError, abs(measured - tone))
+                }
+                XCTAssertLessThanOrEqual(maximumError, 2, "\(sampleRate) Hz / \(tone) Hz")
+            }
+        }
+    }
+
+    func testNonFiniteInputDoesNotPoisonFollowingAudio() throws {
+        let sampleRate = 12_000
+        var writer = ToneWriter(sampleRate: sampleRate, amplitude: 0.8)
+        writer.append(frequencyHz: 1_700, duration: 0.08)
+        var demodulator = try SSTVFrequencyDemodulator(sampleRate: sampleRate)
+        _ = demodulator.process([.nan, .infinity, -.infinity])
+        let frequencies = demodulator.process(writer.samples)
+        XCTAssertTrue(frequencies.allSatisfy(\.isFinite))
+        for frequency in frequencies.suffix(sampleRate / 100) {
+            XCTAssertEqual(frequency, 1_700, accuracy: 2)
+        }
+    }
+
     func testToneScoreIgnoresPhaseAlignedResidualCarrierRipple() throws {
         let sampleRate = 12_000
         var writer = ToneWriter(sampleRate: sampleRate, amplitude: 0.8)
@@ -72,5 +109,7 @@ final class FrequencyDemodulatorTests: XCTestCase {
     func testInvalidSampleRateIsRejected() {
         XCTAssertThrowsError(try SSTVFrequencyDemodulator(sampleRate: 0))
         XCTAssertThrowsError(try SSTVFrequencyDemodulator(sampleRate: 5_000))
+        XCTAssertThrowsError(try SSTVFrequencyDemodulator(sampleRate: 384_001))
+        XCTAssertThrowsError(try SSTVFrequencyDemodulator(sampleRate: Int.max))
     }
 }

@@ -68,9 +68,9 @@ def write_fixture(
             "CFBundleExecutable": "SSTVEncoder",
             "CFBundleIdentifier": "io.github.times1368.sstvencoder",
             "CFBundlePackageType": "APPL",
-            "CFBundleShortVersionString": "1.1.0",
+            "CFBundleShortVersionString": "1.1.1",
             "CFBundleSupportedPlatforms": ["iPhoneOS"],
-            "CFBundleVersion": "2",
+            "CFBundleVersion": "3",
             "DTPlatformName": "iphoneos",
             "MinimumOSVersion": "17.0",
         },
@@ -101,8 +101,8 @@ class IPAValidationTests(unittest.TestCase):
         self.expectations = Expectations(
             app_name="SSTVEncoder",
             bundle_id="io.github.times1368.sstvencoder",
-            marketing_version="1.1.0",
-            build_version="2",
+            marketing_version="1.1.1",
+            build_version="3",
             minimum_os="17.0",
         )
 
@@ -261,8 +261,8 @@ targets:
       base:
         SWIFT_VERSION: "5.0"
         PRODUCT_BUNDLE_IDENTIFIER: io.github.times1368.sstvencoder
-        MARKETING_VERSION: 1.1.0
-        CURRENT_PROJECT_VERSION: 2
+        MARKETING_VERSION: 1.1.1
+        CURRENT_PROJECT_VERSION: 3
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         NSMicrophoneUsageDescription: Decode SSTV only after an explicit start.
     dependencies:
