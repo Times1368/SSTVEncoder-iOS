@@ -15,6 +15,45 @@ env:
   IPA_NAME: SSTVEncoder.ipa
 
 jobs:
+  baseline_capture:
+    name: Capture T02 encoder baselines
+    if: github.ref == 'refs/heads/codex/t02-baseline-capture'
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - name: Check out capture branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode 15.0.1 and verify Swift 5.9
+        run: |
+          sudo xcode-select -s /Applications/Xcode_15.0.1.app/Contents/Developer
+          swift --version
+          swift --version | /usr/bin/grep -E "Swift version 5\.9"
+
+      - name: Generate deterministic SSTV baselines
+        run: |
+          OUTPUT_PATH="$RUNNER_TEMP/t02-baseline"
+          swift run --package-path SSTVKit -c release BaselineGenerator \
+            Tests/Fixtures/testcard.png "$OUTPUT_PATH"
+          /usr/bin/shasum -a 256 "$OUTPUT_PATH"/*.wav > "$OUTPUT_PATH/SHA256SUMS"
+          test "$(find "$OUTPUT_PATH" -maxdepth 1 -name '*.wav' | wc -l | tr -d ' ')" = "3"
+          /usr/bin/python3 -c \
+            'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); assert len(data["records"]) == 3' \
+            "$OUTPUT_PATH/baseline-metadata.json"
+          cat "$OUTPUT_PATH/baseline-metadata.json"
+          cat "$OUTPUT_PATH/SHA256SUMS"
+
+      - name: Upload T02 baseline capture
+        uses: actions/upload-artifact@v4
+        with:
+          name: t02-baseline-${{ github.sha }}
+          path: ${{ runner.temp }}/t02-baseline
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
   compatibility:
     name: Xcode 15.0.1 / Swift 5.9 / iOS 17 compatibility
     runs-on: macos-14

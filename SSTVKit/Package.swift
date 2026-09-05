@@ -10,10 +10,11 @@ let package = Package(
     ],
     products: [
         .library(name: "SSTVKit", targets: ["SSTVKit"]),
+        .executable(name: "BaselineGenerator", targets: ["BaselineGenerator"]),
     ],
     targets: [
         .target(name: "SSTVKit"),
+        .executableTarget(name: "BaselineGenerator", dependencies: ["SSTVKit"]),
         .testTarget(name: "SSTVKitTests", dependencies: ["SSTVKit"]),
     ]
 )
-
