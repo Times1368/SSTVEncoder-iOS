@@ -67,6 +67,9 @@ public enum SSTVDetectionSource: String, Sendable, Equatable, Hashable {
     case vis
     case manual
     case timing
+    /// Automatically inferred from repeated scan lines after missing VIS.
+    /// The original raster row number and missing prefix length are unknown.
+    case lateEntry
 }
 
 public struct SSTVHeaderDetection: Sendable, Equatable {
@@ -116,6 +119,7 @@ public struct SSTVDecodedFrame: Sendable, Equatable {
     }
 
     public var progress: Double? {
+        guard detectionSource != .lateEntry else { return nil }
         guard let totalRows, totalRows > 0 else { return nil }
         return min(1, Double(completedRows) / Double(totalRows))
     }
@@ -134,7 +138,7 @@ public enum SSTVDecodeError: Error, Sendable, Equatable, LocalizedError {
         case .emptyAudio:
             return "音频中没有可解码的采样数据。"
         case .headerNotFound:
-            return "未检测到有效的 SSTV VIS 头。请从完整录音开始导入，或检查信号电平。"
+            return "未能识别 SSTV 模式头或连续行同步。请继续监听、检查信号电平，或手动选择已知模式。"
         case .noImageData:
             return "已识别接收模式，但还没有收到完整扫描行。"
         }

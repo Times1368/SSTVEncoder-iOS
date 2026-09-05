@@ -25,9 +25,11 @@ final class ReceiverViewModel: ObservableObject {
 
     var canExport: Bool { decodedImage != nil }
     var isUsingMicrophone: Bool { session.input == .microphone }
+    var isLateEntry: Bool { decodedFrame?.detectionSource == .lateEntry }
     var modeText: String { decodedFrame?.mode.displayName ?? selection.displayName }
     var rowText: String {
         guard let frame = decodedFrame else { return "尚无图像" }
+        if frame.detectionSource == .lateEntry { return "片段 \(frame.completedRows) 行" }
         if let totalRows = frame.totalRows {
             return "\(frame.completedRows) / \(totalRows) 行"
         }
@@ -35,19 +37,20 @@ final class ReceiverViewModel: ObservableObject {
     }
     var detectionText: String {
         guard let frame = decodedFrame else {
-            return selection == .automatic ? "等待 VIS" : "手动模式"
+            return selection == .automatic ? "等待模式头或行同步" : "手动模式"
         }
         switch frame.detectionSource {
         case .vis: return "VIS 自动识别"
         case .manual: return "手动选择"
         case .timing: return "扫描时序推断"
+        case .lateEntry: return "中途锁定 · 无 VIS"
         }
     }
     var exportFilename: String {
         let name = modeText
             .replacingOccurrences(of: " / ", with: "-")
             .replacingOccurrences(of: " ", with: "-")
-        return "SSTV-Decoded-\(name).png"
+        return "SSTV-\(isLateEntry ? "Partial" : "Decoded")-\(name).png"
     }
 
     func select(_ newSelection: SSTVReceiveSelection) {
@@ -55,7 +58,7 @@ final class ReceiverViewModel: ObservableObject {
         stopReceiving(clearResult: true)
         selection = newSelection
         statusText = newSelection == .automatic
-            ? "等待自动识别 SSTV VIS。"
+            ? "等待模式头或连续行同步，可在发送中途开始接收。"
             : "已选择 \(newSelection.displayName)。"
         errorMessage = nil
     }
@@ -85,7 +88,7 @@ final class ReceiverViewModel: ObservableObject {
                 }.value
                 try Task.checkCancellation()
                 statusText = selectedMode == .automatic
-                    ? "正在搜索 VIS 并解码…"
+                    ? "正在搜索模式头或连续行同步…"
                     : "正在按 \(selectedMode.displayName) 解码…"
 
                 let decoder = try SSTVDecoder(sampleRate: buffer.sampleRate)
@@ -123,7 +126,7 @@ final class ReceiverViewModel: ObservableObject {
                 )
                 streamDecoder = decoder
                 statusText = selectedMode == .automatic
-                    ? "正在监听，等待 SSTV VIS 头…"
+                    ? "正在监听，识别模式头或尝试中途锁定…"
                     : "正在接收 \(selectedMode.displayName)…"
 
                 var completedFrame: SSTVDecodedFrame?
@@ -202,7 +205,9 @@ final class ReceiverViewModel: ObservableObject {
         do {
             decodedImage = try DecodedImageRenderer.image(from: frame.image)
             syncSessionState()
-            statusText = "正在解码 \(frame.mode.displayName)：\(rowDescription(frame))"
+            statusText = frame.detectionSource == .lateEntry
+                ? "中途接收 \(frame.mode.displayName)：\(rowDescription(frame))"
+                : "正在解码 \(frame.mode.displayName)：\(rowDescription(frame))"
         } catch {
             handle(error, generation: generation)
         }
@@ -222,7 +227,9 @@ final class ReceiverViewModel: ObservableObject {
 
         if frame.isComplete {
             guard session.finish(result: frame, for: generation) else { return }
-            statusText = "解码完成：\(frame.mode.displayName)。"
+            statusText = frame.detectionSource == .lateEntry
+                ? "当前画布已填满，保留中途接收片段：\(frame.mode.displayName)。"
+                : "解码完成：\(frame.mode.displayName)。"
         } else {
             guard session.publish(
                 result: frame,
@@ -258,6 +265,9 @@ final class ReceiverViewModel: ObservableObject {
     }
 
     private func rowDescription(_ frame: SSTVDecodedFrame) -> String {
+        if frame.detectionSource == .lateEntry {
+            return "已解码 \(frame.completedRows) 行，原始行号未知"
+        }
         if let totalRows = frame.totalRows {
             return "\(frame.completedRows)/\(totalRows) 行"
         }

@@ -96,7 +96,7 @@ struct ReceiveView: View {
                     set: { viewModel.select($0) }
                 )
             ) {
-                Text("自动识别 SSTV（VIS）")
+                Text("自动识别 SSTV（支持中途接收）")
                     .tag(SSTVReceiveSelection.automatic)
                 Text("Contrib / HF Fax · IOC 576 · 120 LPM")
                     .tag(SSTVReceiveSelection.hfFax(.ioc576_120))
@@ -117,7 +117,7 @@ struct ReceiveView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if viewModel.selection == .automatic {
-                Text("自动识别 Robot、PD、Martin、Scottie 和 Wraase 共 15 种 VIS 彩色模式。")
+                Text("优先识别模式头；错过开头时，尝试用连续行同步识别 15 种 SSTV 模式。锁定需要数条清晰扫描行。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -177,7 +177,11 @@ struct ReceiveView: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            if viewModel.isReceiving || viewModel.decodedFrame != nil {
+            if viewModel.isLateEntry {
+                Text("中途接收 · 不估算整图完成率")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if viewModel.isReceiving || viewModel.decodedFrame != nil {
                 ProgressView(value: viewModel.progress)
                     .opacity(viewModel.decodedFrame?.totalRows == nil ? 0.35 : 1)
             }
@@ -214,11 +218,17 @@ struct ReceiveView: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+                if viewModel.isLateEntry {
+                    Label("已保留可接收的图像片段。缺失的开头无法恢复，原始行号未知；可导出当前 PNG。", systemImage: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             } else {
                 ContentUnavailableView(
                     "等待 SSTV 图像",
                     systemImage: "antenna.radiowaves.left.and.right",
-                    description: Text("导入录音，或启动麦克风后播放完整 SSTV 信号。")
+                    description: Text("导入录音或启动麦克风；即使发送已经开始，也可尝试中途锁定。")
                 )
                 .frame(maxWidth: .infinity, minHeight: 260)
             }

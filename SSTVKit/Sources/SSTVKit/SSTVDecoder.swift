@@ -7,6 +7,8 @@ public actor SSTVStreamDecoder {
     private var demodulator: SSTVFrequencyDemodulator
     private var frequencies: [Float] = []
     private var headerSearchStart = 0
+    private var lateEntryDetector = SSTVLateEntryDetector()
+    private var lastLateEntrySearchCount = 0
     private var frameAssembler: SSTVFrameAssembler?
     private var faxAssembler: HFFaxAssembler?
 
@@ -81,7 +83,7 @@ public actor SSTVStreamDecoder {
         }
 
         if frameAssembler == nil {
-            detectHeaderIfAvailable()
+            detectHeaderIfAvailable(forceTimingSearch: true)
         }
         guard let frameAssembler else {
             throw SSTVDecodeError.headerNotFound
@@ -93,7 +95,7 @@ public actor SSTVStreamDecoder {
         return try frameAssembler.snapshot()
     }
 
-    private func detectHeaderIfAvailable() {
+    private func detectHeaderIfAvailable(forceTimingSearch: Bool = false) {
         if let detection = SSTVHeaderDetector.detect(
             frequencies: frequencies,
             sampleRate: sampleRate,
@@ -127,6 +129,29 @@ public actor SSTVStreamDecoder {
                 frequencyOffsetHz: detection.frequencyOffsetHz
             )
             return
+        }
+
+        if selection == .automatic,
+           forceTimingSearch || frequencies.count - lastLateEntrySearchCount >= sampleRate / 4 {
+            lastLateEntrySearchCount = frequencies.count
+            if let detection = lateEntryDetector.detect(
+                frequencies: frequencies,
+                sampleRate: sampleRate,
+                latencySamples: demodulator.latencySamples
+            ) {
+                // Keep the samples preceding this sync: they prove its leading
+                // edge to the existing line clock. No raw frame origin is known.
+                frameAssembler = SSTVFrameAssembler(
+                    mode: detection.mode,
+                    detectionSource: .lateEntry,
+                    pictureStartSample: detection.firstLineStartSample,
+                    firstLineStartSample: detection.firstLineStartSample,
+                    sampleRate: sampleRate,
+                    latencySamples: demodulator.latencySamples,
+                    frequencyOffsetHz: detection.frequencyOffsetHz
+                )
+                return
+            }
         }
 
         if case let .mode(mode) = selection,
@@ -164,12 +189,16 @@ public actor SSTVStreamDecoder {
     }
 
     private func trimWaitingAudioIfNeeded() {
-        let maximum = sampleRate * 4
-        let retained = sampleRate * 2
+        // Four Scottie DX syncs plus an arbitrary mid-line entry need more
+        // history than the old two-second retained window could provide.
+        let maximum = sampleRate * 8
+        let retained = sampleRate * 6
         guard frequencies.count > maximum else { return }
         let dropCount = frequencies.count - retained
         frequencies.removeFirst(dropCount)
         headerSearchStart = max(0, headerSearchStart - dropCount)
+        lateEntryDetector.removeFirst(dropCount)
+        lastLateEntrySearchCount = max(0, lastLateEntrySearchCount - dropCount)
     }
 }
 

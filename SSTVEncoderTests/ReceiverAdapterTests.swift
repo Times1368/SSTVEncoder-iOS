@@ -37,4 +37,12 @@ final class ReceiverAdapterTests: XCTestCase {
         }
         XCTAssertEqual(ReceiverViewModel.selections.count, SSTVMode.allCases.count + 2)
     }
+
+    func testAutomaticReceiverExplainsLineTimingWithoutStartingTheMicrophone() {
+        let model = ReceiverViewModel()
+        XCTAssertTrue(model.detectionText.contains("行同步"))
+        XCTAssertFalse(model.isReceiving)
+        XCTAssertFalse(model.isUsingMicrophone)
+        XCTAssertFalse(model.isLateEntry)
+    }
 }
