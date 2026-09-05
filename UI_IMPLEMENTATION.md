@@ -29,5 +29,5 @@
 ## 验证边界
 
 - Python 契约测试检查 Any/Dark、色值、资产接线、源码边界与四 Tab 文案。
-- 新增 ThemeTests 在 iOS 测试宿主检查实际 UIColor 资产解析和 token 尺寸；步骤 2 将增加 AppTabTests 检查顺序/默认值。执行结果以新 Actions 为准。
+- 新增 ThemeTests 在 iOS 测试宿主检查实际 UIColor 资产解析和 token 尺寸；AppTabTests 检查顺序/默认值。执行结果以新 Actions 为准。
 - 本机没有运行 Swift/Xcode，也没有把静态检查或设计稿当成 App 渲染验收。真实 iPhone、音频、电平、瀑布、连续收图等原十项验收仍未执行。

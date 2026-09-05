@@ -24,8 +24,9 @@ struct ReceiveView: View {
                 .frame(maxWidth: 760)
                 .frame(maxWidth: .infinity)
             }
-            .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("SSTV 解码")
+            .background(Theme.pageBackground)
+            .navigationTitle("接收")
+            .navigationBarTitleDisplayMode(.inline)
         }
         .fileImporter(
             isPresented: $isImportingAudio,

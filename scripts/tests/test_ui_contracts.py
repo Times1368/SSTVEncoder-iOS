@@ -63,5 +63,37 @@ class ThemeContractTests(unittest.TestCase):
         self.assertNotRegex(source, r"Color\s*\(\s*(?:red:|\.sRGB|hex:)")
 
 
+class TabShellContractTests(unittest.TestCase):
+    def test_four_tab_shell_defaults_to_receive(self) -> None:
+        source = (ROOT / "SSTVEncoder/Features/ContentView.swift").read_text(encoding="utf-8")
+        shell = source.split("private struct EncoderView", 1)[0]
+        self.assertIn("selectedTab = AppTab.defaultTab", shell)
+        self.assertIn("TabView(selection: $selectedTab)", shell)
+        for tab in ("receive", "transmit", "library", "settings"):
+            self.assertIn(f".tag(AppTab.{tab})", shell)
+        self.assertLess(shell.index("ReceiveView()"), shell.index("EncoderView()"))
+        self.assertNotIn("startMicrophone", shell)
+        self.assertNotIn("requestRecordPermission", shell)
+
+    def test_existing_privacy_copy_is_preserved_and_titles_are_inline(self) -> None:
+        transmit = (ROOT / "SSTVEncoder/Features/ContentView.swift").read_text(encoding="utf-8")
+        receive = (ROOT / "SSTVEncoder/Features/ReceiveView.swift").read_text(encoding="utf-8")
+        self.assertIn("仅生成、播放和导出音频；不会连接或控制电台发射。", transmit)
+        self.assertIn("只有点击“启动麦克风”后才会请求并使用麦克风；原始音频不会保存或上传。", receive)
+        self.assertIn('.navigationTitle("发射")', transmit)
+        self.assertIn('.navigationTitle("接收")', receive)
+        for source in (transmit, receive):
+            self.assertIn(".navigationBarTitleDisplayMode(.inline)", source)
+            self.assertIn(".onDisappear", source)
+
+    def test_new_tabs_do_not_pretend_to_have_persistence_or_start_audio(self) -> None:
+        source = (ROOT / "SSTVEncoder/Features/AppShellViews.swift").read_text(encoding="utf-8")
+        self.assertIn("尚未启用自动入库", source)
+        self.assertIn("设置页骨架", source)
+        self.assertGreaterEqual(source.count(".navigationBarTitleDisplayMode(.inline)"), 3)
+        for forbidden in ("SwiftData", "AVAudioEngine", "startMicrophone", "requestRecordPermission", "#available"):
+            self.assertNotIn(forbidden, source)
+
+
 if __name__ == "__main__":
     unittest.main()

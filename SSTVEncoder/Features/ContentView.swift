@@ -6,18 +6,39 @@ import UniformTypeIdentifiers
 
 @MainActor
 struct ContentView: View {
-    var body: some View {
-        TabView {
-            EncoderView()
-                .tabItem {
-                    Label("编码", systemImage: "waveform.badge.plus")
-                }
+    @State private var selectedTab = AppTab.defaultTab
 
+    var body: some View {
+        TabView(selection: $selectedTab) {
             ReceiveView()
                 .tabItem {
-                    Label("解码", systemImage: "dot.radiowaves.left.and.right")
+                    Label(AppTab.receive.title, systemImage: AppTab.receive.systemImage)
                 }
+                .tag(AppTab.receive)
+
+            EncoderView()
+                .tabItem {
+                    Label(AppTab.transmit.title, systemImage: AppTab.transmit.systemImage)
+                }
+                .tag(AppTab.transmit)
+
+            LibraryShellView(
+                openReceive: { selectedTab = .receive },
+                openTransmit: { selectedTab = .transmit }
+            )
+                .tabItem {
+                    Label(AppTab.library.title, systemImage: AppTab.library.systemImage)
+                }
+                .tag(AppTab.library)
+
+            SettingsShellView()
+                .tabItem {
+                    Label(AppTab.settings.title, systemImage: AppTab.settings.systemImage)
+                }
+                .tag(AppTab.settings)
         }
+        .tint(Theme.accent)
+        .toolbarBackground(Theme.pageBackground, for: .tabBar)
     }
 }
 
@@ -45,8 +66,9 @@ private struct EncoderView: View {
                 .frame(maxWidth: 760)
                 .frame(maxWidth: .infinity)
             }
-            .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("SSTV 编码")
+            .background(Theme.pageBackground)
+            .navigationTitle("发射")
+            .navigationBarTitleDisplayMode(.inline)
         }
         .onChange(of: pickerItem) { _, newItem in
             startPhotoLoad(newItem)
