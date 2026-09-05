@@ -14,7 +14,19 @@ let package = Package(
     ],
     targets: [
         .target(name: "SSTVKit"),
-        .executableTarget(name: "BaselineGenerator", dependencies: ["SSTVKit"]),
+        .target(
+            name: "BaselineSupport",
+            dependencies: ["SSTVKit"],
+            path: "TestSupport/BaselineSupport"
+        ),
+        .executableTarget(
+            name: "BaselineGenerator",
+            dependencies: ["SSTVKit", "BaselineSupport"]
+        ),
         .testTarget(name: "SSTVKitTests", dependencies: ["SSTVKit"]),
+        .testTarget(
+            name: "BaselineSupportTests",
+            dependencies: ["SSTVKit", "BaselineSupport"]
+        ),
     ]
 )
