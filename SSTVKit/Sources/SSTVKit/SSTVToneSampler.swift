@@ -158,9 +158,14 @@ struct SSTVToneSampler {
         }
         let inside = support(from: rawStart, to: end) ?? 0
         guard inside >= 0.6 else { return nil }
-        let outside = (support(from: rawStart - trim, to: rawStart) ?? 0)
-            + (support(from: end, to: end + trim) ?? 0)
-        guard outside < 1.6 else { return nil } // A continuous carrier is not a pulse.
+        // Missing samples are not evidence of silence. In particular, VIS
+        // removal can leave a truncated first sync at raw sample zero. Taking
+        // that boundary as a measured edge biases the clock's initial phase.
+        // Both transitions must be observed before a pulse can steer the clock.
+        guard let before = support(from: rawStart - trim, to: rawStart),
+              let after = support(from: end, to: end + trim),
+              before < 0.8, after < 0.8 else { return nil }
+        let outside = before + after
         let score = 100 * (1 - inside) + 25 * outside
             + 0.1 * abs(settledMean - targetFrequency) + 0.2 * deviation
         return (score, settledMean)
