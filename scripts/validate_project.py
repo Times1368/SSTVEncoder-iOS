@@ -157,6 +157,47 @@ class ContractValidator:
         if "Int16" not in all_source:
             self.fail("SSTVKit WAV output must explicitly quantize to signed Int16 PCM")
 
+    def validate_asset_catalog_sources(self, project: str) -> None:
+        # Check this repository's explicit, two-space-indented XcodeGen spec.
+        # A path mentioned elsewhere (especially under the ignored target-level
+        # resources key or in the test target) does not add it to the app.
+        self.reject_regex(
+            project,
+            r"^ {4}resources[ \t]*:",
+            "XcodeGen ignores target-level resources; use sources with buildPhase: resources",
+        )
+        app_target = re.search(
+            r"^  SSTVEncoder:[ \t]*\n(?P<body>.*?)(?=^  \S|\Z)",
+            project,
+            re.MULTILINE | re.DOTALL,
+        )
+        if app_target is None:
+            return
+        sources = re.search(
+            r"^    sources:[ \t]*\n(?P<body>.*?)(?=^    \S|\Z)",
+            app_target.group("body"),
+            re.MULTILINE | re.DOTALL,
+        )
+        source_text = sources.group("body") if sources else ""
+        for name, path in (
+            ("AppIcon", "Resources/Generated/Assets.xcassets"),
+            ("Theme", "Resources/Theme.xcassets"),
+        ):
+            entry = re.search(
+                rf"^      - path:[ \t]*[\"']?{re.escape(path)}[\"']?[ \t]*"
+                r"(?:\n(?P<body>.*?)(?=^      -|\Z)|\Z)",
+                source_text,
+                re.MULTILINE | re.DOTALL,
+            )
+            if entry is None:
+                self.fail(f"{name} catalog must be in SSTVEncoder target sources: {path}")
+                continue
+            self.require_regex(
+                entry.group("body") or "",
+                r"^        buildPhase:[ \t]*resources[ \t]*$",
+                f"{name} catalog must explicitly set buildPhase: resources",
+            )
+
     def validate_xcodegen_project(self) -> None:
         project = self.read_text("SSTVEncoder/project.yml")
         if not project:
@@ -194,16 +235,13 @@ class ContractValidator:
             (r"^\s+path:\s*[\"']?\.\./SSTVKit[\"']?\s*$", "SSTVKit must be referenced through ../SSTVKit"),
             (r"^\s+-\s+package:\s*SSTVKit\s*$", "the app must link the SSTVKit package product"),
             (
-                r"^\s+-\s+path:\s*[\"']?Resources/Generated/Assets\.xcassets[\"']?\s*$",
-                "XcodeGen must include the generated AppIcon asset catalog",
-            ),
-            (
                 r"^\s*ASSETCATALOG_COMPILER_APPICON_NAME:\s*[\"']?AppIcon[\"']?\s*$",
                 "XcodeGen must select the AppIcon asset set",
             ),
         )
         for pattern, message in exact_checks:
             self.require_regex(project, pattern, message)
+        self.validate_asset_catalog_sources(project)
 
         test_target = re.search(
             r"^  SSTVEncoderTests:\s*\n(?P<body>.*?)(?=^  \S|\Z)",

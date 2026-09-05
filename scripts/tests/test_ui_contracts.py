@@ -5,6 +5,8 @@ import re
 import unittest
 from pathlib import Path
 
+from scripts.validate_project import ContractValidator
+
 
 ROOT = Path(__file__).resolve().parents[2]
 CATALOG = ROOT / "SSTVEncoder/Resources/Theme.xcassets"
@@ -51,7 +53,9 @@ class ThemeContractTests(unittest.TestCase):
                 self.color_pairs(name)
         self.assertNotRegex(source, r"Color\s*\(\s*(?:red:|\.sRGB|hex:)")
         project = (ROOT / "SSTVEncoder/project.yml").read_text(encoding="utf-8")
-        self.assertIn("Resources/Theme.xcassets", project)
+        validator = ContractValidator(ROOT)
+        validator.validate_asset_catalog_sources(project)
+        self.assertEqual(validator.errors, [])
 
     def test_components_use_named_tokens_and_no_new_persistence_framework(self) -> None:
         source = (ROOT / "SSTVEncoder/Features/DesignSystem/Components.swift").read_text(encoding="utf-8")

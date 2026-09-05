@@ -31,3 +31,12 @@
 - Python 契约测试检查 Any/Dark、色值、资产接线、源码边界与四 Tab 文案。
 - 新增 ThemeTests 在 iOS 测试宿主检查实际 UIColor 资产解析和 token 尺寸；AppTabTests 检查顺序/默认值。执行结果以新 Actions 为准。
 - 本机没有运行 Swift/Xcode，也没有把静态检查或设计稿当成 App 渲染验收。真实 iPhone、音频、电平、瀑布、连续收图等原十项验收仍未执行。
+
+## 颜色资产打包修复（2026-09-05）
+
+- 失败证据：[Actions #12 / iOS 17 测试 job](https://github.com/Times1368/SSTVEncoder-iOS/actions/runs/33938721941/job/101231711387)。Xcode 15.0.1 / Swift 5.9，XcodeGen 2.46.0；SwiftPM 测试通过，App 测试在 ThemeTests 失败。第一条错误是 `ThemeTests.swift:56: XCTUnwrap failed: expected non-nil value of type "UIColor"`；另一个测试的 18 个颜色 × 2 个外观断言全部失败。
+- 根因不是缺少颜色文件。18 组 Any/Dark 资产已经提交，但 `project.yml` 把两个资产目录写在 target 级 `resources:`，该键不被 XcodeGen 识别。完整构建日志没有 `CompileAssetCatalog` / `actool` 步骤；App 未编译这些资源。
+- 按 [XcodeGen 2.46.0 Sources 规范](https://github.com/yonaskolb/XcodeGen/blob/2.46.0/Docs/ProjectSpec.md#sources)，将生成的 AppIcon 与 Theme 目录都移到 App target 的 `sources`，分别指定 `buildPhase: resources`。不重复创建颜色，不添加硬编码后备色，不切换测试 bundle 来绕过失败。
+- 先新增配置反例测试，确认旧校验器漏掉错误层级、错误 target、缺少 Theme 和错误编译阶段；再修校验器，确认它能拒绝本次出错的原始配置；最后修项目声明。本地 Python 测试 25/25、仓库契约与 `git diff --check` 通过。现有 workflow 已执行这些脚本，无需改变 CI 流程。
+- ThemeTests 保留原来的全部明暗颜色和精确色值断言，另加宿主 bundle ID 与 `Assets.car` 存在性检查。修复后的 Swift/iOS 运行结果待此次推送的 Actions 验证，不宣称已经通过。
+- SSTVKit、Core、App 源码与本分支的 main 基点完全一致；颜色文件及色值未改；`ui/baseline` 未修改、未推送、未重跑。只在 `ui/design-system` 修复，不合主干、不推进后续模块。

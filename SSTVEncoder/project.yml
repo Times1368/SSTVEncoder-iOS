@@ -26,9 +26,10 @@ targets:
       - path: App
       - path: Core
       - path: Features
-    resources:
       - path: Resources/Generated/Assets.xcassets
+        buildPhase: resources
       - path: Resources/Theme.xcassets
+        buildPhase: resources
     dependencies:
       - package: SSTVKit
         product: SSTVKit

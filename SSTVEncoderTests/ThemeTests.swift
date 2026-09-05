@@ -5,6 +5,14 @@ import XCTest
 
 @MainActor
 final class ThemeTests: XCTestCase {
+    func testAppHostContainsCompiledAssetCatalog() {
+        XCTAssertEqual(Bundle.main.bundleIdentifier, "io.github.times1368.sstvencoder")
+        XCTAssertNotNil(
+            Bundle.main.url(forResource: "Assets", withExtension: "car"),
+            "应用宿主中缺少已编译的颜色与图标资产：\(Bundle.main.bundlePath)"
+        )
+    }
+
     func testEveryNamedColorResolvesInBothAppearances() {
         for token in Theme.ColorToken.allCases {
             for style in [UIUserInterfaceStyle.light, .dark] {

@@ -251,8 +251,12 @@ targets:
   SSTVEncoder:
     type: application
     platform: iOS
-    resources:
+    sources:
+      - path: App
       - path: Resources/Generated/Assets.xcassets
+        buildPhase: resources
+      - path: Resources/Theme.xcassets
+        buildPhase: resources
     settings:
       base:
         SWIFT_VERSION: "5.0"
@@ -316,8 +320,8 @@ targets:
         project = self.root / "SSTVEncoder" / "project.yml"
         project.write_text(
             self.PROJECT.replace(
-                "    resources:\n"
-                "      - path: Resources/Generated/Assets.xcassets\n",
+                "      - path: Resources/Generated/Assets.xcassets\n"
+                "        buildPhase: resources\n",
                 "",
             ).replace(
                 "        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon\n",
@@ -328,6 +332,62 @@ targets:
         validator = ContractValidator(self.root)
         validator.validate_xcodegen_project()
         self.assertTrue(any("AppIcon" in error for error in validator.errors))
+
+    def test_ignored_target_level_resources_key_is_rejected(self) -> None:
+        project = self.root / "SSTVEncoder" / "project.yml"
+        project.write_text(
+            self.PROJECT.replace("    sources:\n", "    resources:\n"),
+            encoding="utf-8",
+        )
+        validator = ContractValidator(self.root)
+        validator.validate_xcodegen_project()
+        self.assertTrue(any("target-level resources" in error for error in validator.errors))
+
+    def test_asset_catalogs_in_test_target_do_not_satisfy_app_resources(self) -> None:
+        catalogs = (
+            "      - path: Resources/Generated/Assets.xcassets\n"
+            "        buildPhase: resources\n"
+            "      - path: Resources/Theme.xcassets\n"
+            "        buildPhase: resources\n"
+        )
+        project = self.root / "SSTVEncoder" / "project.yml"
+        project.write_text(
+            self.PROJECT.replace(catalogs, "").replace(
+                "    type: bundle.unit-test\n",
+                "    type: bundle.unit-test\n    sources:\n" + catalogs,
+            ),
+            encoding="utf-8",
+        )
+        validator = ContractValidator(self.root)
+        validator.validate_xcodegen_project()
+        for name in ("AppIcon", "Theme"):
+            self.assertTrue(any(name in error and "sources" in error for error in validator.errors))
+
+    def test_theme_catalog_is_required(self) -> None:
+        project = self.root / "SSTVEncoder" / "project.yml"
+        project.write_text(
+            self.PROJECT.replace(
+                "      - path: Resources/Theme.xcassets\n"
+                "        buildPhase: resources\n",
+                "",
+            ),
+            encoding="utf-8",
+        )
+        validator = ContractValidator(self.root)
+        validator.validate_xcodegen_project()
+        self.assertTrue(any("Theme" in error for error in validator.errors))
+
+    def test_asset_catalogs_must_use_resources_build_phase(self) -> None:
+        for phase in ("none", "sources"):
+            with self.subTest(phase=phase):
+                project = self.root / "SSTVEncoder" / "project.yml"
+                project.write_text(
+                    self.PROJECT.replace("buildPhase: resources", f"buildPhase: {phase}"),
+                    encoding="utf-8",
+                )
+                validator = ContractValidator(self.root)
+                validator.validate_xcodegen_project()
+                self.assertTrue(any("buildPhase: resources" in error for error in validator.errors))
 
     def test_test_target_requires_a_direct_sstvkit_dependency(self) -> None:
         project = self.root / "SSTVEncoder" / "project.yml"
