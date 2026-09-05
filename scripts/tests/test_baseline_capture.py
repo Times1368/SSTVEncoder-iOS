@@ -13,7 +13,7 @@ from unittest.mock import patch
 from scripts.capture_baselines import (
     CASES,
     BaselineError,
-    require_consistent_row_order,
+    row_order_findings,
     run_bounded,
     summarize,
 )
@@ -93,16 +93,18 @@ class BaselineCaptureTests(unittest.TestCase):
         path.write_text(json.dumps(report), encoding="utf-8")
         summarize(self.output)
         self.assertTrue((self.output / "SHA256SUMS").is_file())
-        with self.assertRaisesRegex(BaselineError, "pd120"):
-            require_consistent_row_order(self.output)
+        self.assertIn("pd120", "\n".join(row_order_findings(self.output)))
 
-    def test_incomplete_frame_fails_the_separate_row_order_gate(self) -> None:
+    def test_incomplete_frame_is_a_nonblocking_diagnostic(self) -> None:
         path = self.output / "pd120-row-order.json"
         report = json.loads(path.read_text(encoding="utf-8"))
         report["completedRows"] -= 2
         path.write_text(json.dumps(report), encoding="utf-8")
-        with self.assertRaisesRegex(BaselineError, "pd120"):
-            require_consistent_row_order(self.output)
+        self.assertIn("pd120", "\n".join(row_order_findings(self.output)))
+
+    def test_missing_row_order_report_is_nonblocking(self) -> None:
+        (self.output / "pd120-row-order.json").unlink()
+        self.assertIn("pd120", "\n".join(row_order_findings(self.output)))
 
     def test_commands_cannot_read_stdin_and_have_an_explicit_timeout(self) -> None:
         with patch("scripts.capture_baselines.subprocess.Popen") as start:

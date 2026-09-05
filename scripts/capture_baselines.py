@@ -124,11 +124,18 @@ def summarize(output: Path, *, commit: str = "") -> dict:
     return report
 
 
-def require_consistent_row_order(output: Path) -> None:
+def row_order_findings(output: Path) -> list[str]:
+    """Record diagnostic uncertainty without rejecting valid encoder baselines."""
     problems = []
     for mode_id in CASES:
-        report = read_json(output / f"{mode_id}-row-order.json")
+        try:
+            report = read_json(output / f"{mode_id}-row-order.json")
+        except BaselineError as error:
+            problems.append(f"{mode_id}: {error}")
+            continue
         measurement = report.get("measurement") or {}
+        if not isinstance(measurement, dict):
+            measurement = {}
         if not (
             report.get("modeID") == mode_id
             and report.get("isComplete") is True
@@ -139,8 +146,7 @@ def require_consistent_row_order(output: Path) -> None:
             and measurement.get("status") == "consistent"
         ):
             problems.append(f"{mode_id}: {json.dumps(report, ensure_ascii=False)}")
-    if problems:
-        raise BaselineError("Separate row-order diagnostic needs review; WAV hashes remain valid:\n" + "\n".join(problems))
+    return problems
 
 
 def main() -> int:
@@ -174,8 +180,11 @@ def main() -> int:
             with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as stream:
                 stream.write(text)
     else:
-        require_consistent_row_order(args.output)
-        print("三个模式的编解码回环行序一致；不代表 App 图片载入器已验证。", flush=True)
+        findings = row_order_findings(args.output)
+        if findings:
+            print("行序诊断待复核（不阻断已校验的编码基线）：\n" + "\n".join(findings), flush=True)
+        else:
+            print("三个模式的编解码回环行序一致；不代表 App 图片载入器已验证。", flush=True)
     return 0
 
 

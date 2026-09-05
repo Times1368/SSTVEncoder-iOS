@@ -1,0 +1,72 @@
+{
+  "commit": "6f8e34554e2967f4bed3f52d0932f39962e39913",
+  "coreSourcesSHA256": {
+    "SSTVKit/Sources/SSTVKit/HFFaxAssembler.swift": "9f8d72521938709935134cbcfc1cbf9fc37ec74cde92a6c1caf5ccbfa590388e",
+    "SSTVKit/Sources/SSTVKit/RGBImage.swift": "0b33f627761379e7006a98b1486a2a8a3acf97e925dcb8b151755c8622aaf4e6",
+    "SSTVKit/Sources/SSTVKit/SSTVColor.swift": "31f4cb817be37caee17cec170f36ea52b0e11d1e7ec26e970ecb462afdb4704f",
+    "SSTVKit/Sources/SSTVKit/SSTVDecodeTypes.swift": "ad3c843f4b5c2a0b3d5f4bc086e23c00814ad139ea62c35d893f609c06485dc1",
+    "SSTVKit/Sources/SSTVKit/SSTVDecoder.swift": "111b89952f0719b8df3f4aa27974b84f6412af139899500229185af98de7e063",
+    "SSTVKit/Sources/SSTVKit/SSTVEncoder.swift": "4685cd5924bef7e7582587489cd3610eb24f6b2a0f7f68cc913ce8dbf4c31957",
+    "SSTVKit/Sources/SSTVKit/SSTVFrameAssembler.swift": "e440081b3e3805bdc701e59a643a253a8ff3b6f7993e7a42a4ef826ae6217682",
+    "SSTVKit/Sources/SSTVKit/SSTVFrequencyDemodulator.swift": "6344491512f3d5d050d4e19ab76bf56290b1647dcf4b06ff671df1328dde119d",
+    "SSTVKit/Sources/SSTVKit/SSTVHeader.swift": "e72f2fba0afccd292497297000ace874377c3cc5aec34122457c13ab452ddcdc",
+    "SSTVKit/Sources/SSTVKit/SSTVHeaderDetector.swift": "3d3e535d8586a7f6fdcfec8996bc2adb675b551654093627d39c70abafb9d389",
+    "SSTVKit/Sources/SSTVKit/SSTVLineEncoder.swift": "6f3acd8e05384d964e25d9a957c8b1d280713728dbf98bf0b2e9bd66864e8d34",
+    "SSTVKit/Sources/SSTVKit/SSTVMode.swift": "7d3f7095961866fbc21921aa9cdb56ae64744ecb73856d267d8b4ed7d6c8e76e",
+    "SSTVKit/Sources/SSTVKit/SSTVTimingDetector.swift": "2af36d9408d6db97fded04fafeb3d1d1af0865b085169e2a722f6e09159f6a45",
+    "SSTVKit/Sources/SSTVKit/SSTVToneSampler.swift": "f952c8ac84981b50576cadc056be9cb71fd33e54ea30133b4834a3bb59e7a787",
+    "SSTVKit/Sources/SSTVKit/SampleClock.swift": "a4caa93d6ec1ce1146363f807756a1a89a31e8f69f6667783f8650675c3acc28",
+    "SSTVKit/Sources/SSTVKit/ToneWriter.swift": "3da1c66d141beb52ffde6eca24dba3d3665347ca65334a9095f618d290d7e371",
+    "SSTVKit/Sources/SSTVKit/WAVEncoder.swift": "1684e72b56736c360504431b1e18668ae10504a937f952fbba74b7903c7b2306"
+  },
+  "fixtureID": "coordinate-rgb-v1",
+  "fixtureRule": "Formula evaluated directly at each mode's native (x,y); no IO or resizing",
+  "records": [
+    {
+      "amplitude": 0.8,
+      "durationSeconds": 36.91,
+      "filename": "Robot-36-Color.wav",
+      "fixtureFormula": "r=(x*8)%256;g=(y*8)%256;b=((x+y)*4)%256",
+      "fixtureID": "coordinate-rgb-v1",
+      "height": 240,
+      "modeID": "robot36Color",
+      "modeName": "Robot 36 Color",
+      "sampleCount": 1771680,
+      "sampleRate": 48000,
+      "sha256": "2acfaaab8b5dd14b17f283f1d4b05815259e1eb60ff461d69fe33ae3d14fa3fb",
+      "wavBytes": 3543404,
+      "width": 320
+    },
+    {
+      "amplitude": 0.8,
+      "durationSeconds": 115.20016666666666,
+      "filename": "Martin-M1.wav",
+      "fixtureFormula": "r=(x*8)%256;g=(y*8)%256;b=((x+y)*4)%256",
+      "fixtureID": "coordinate-rgb-v1",
+      "height": 256,
+      "modeID": "martinM1",
+      "modeName": "Martin M1",
+      "sampleCount": 5529608,
+      "sampleRate": 48000,
+      "sha256": "c8d217e84aeb81c83a76d00b83b4791fd3b9f370d65112d280e2c29c5c6c6251",
+      "wavBytes": 11059260,
+      "width": 320
+    },
+    {
+      "amplitude": 0.8,
+      "durationSeconds": 127.01304166666667,
+      "filename": "PD-120.wav",
+      "fixtureFormula": "r=(x*8)%256;g=(y*8)%256;b=((x+y)*4)%256",
+      "fixtureID": "coordinate-rgb-v1",
+      "height": 496,
+      "modeID": "pd120",
+      "modeName": "PD 120",
+      "sampleCount": 6096626,
+      "sampleRate": 48000,
+      "sha256": "8553fc7fb48ac291245df7f9bbd79bf210cb209a39115ce04dd2416ab0dc5e52",
+      "wavBytes": 12193296,
+      "width": 640
+    }
+  ],
+  "schemaVersion": 2
+}

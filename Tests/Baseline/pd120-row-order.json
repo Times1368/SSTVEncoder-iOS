@@ -1,0 +1,12 @@
+{
+  "completedRows" : 496,
+  "detectedModeMatches" : true,
+  "expectedRows" : 496,
+  "isComplete" : true,
+  "measurement" : {
+    "reversedOrderMeanAbsoluteError" : 81.3704322076613,
+    "sameOrderMeanAbsoluteError" : 73.92225722446237,
+    "status" : "inconclusive"
+  },
+  "modeID" : "pd120"
+}
