@@ -11,6 +11,8 @@ struct SSTVFrequencyDemodulator: Sendable {
     private let centerFrequency = 1_900.0
     private let oscillatorStep: Double
     private let coefficients: [Double]
+    private let mixerLatencySamples: Int
+    private var audioBandFilter: SSTVAudioBandFilter
 
     private var oscillatorPhase = 0.0
     private var inPhase: [Double]
@@ -44,7 +46,10 @@ struct SSTVFrequencyDemodulator: Sendable {
         }
         let gain = taps.reduce(0, +)
         coefficients = taps.map { $0 / gain }
-        latencySamples = half
+        mixerLatencySamples = half
+        let audioFilter = SSTVAudioBandFilter(sampleRate: sampleRate)
+        audioBandFilter = audioFilter
+        latencySamples = half + audioFilter.latencySamples
         inPhase = Array(repeating: 0, count: taps.count)
         quadrature = Array(repeating: 0, count: taps.count)
     }
@@ -54,7 +59,7 @@ struct SSTVFrequencyDemodulator: Sendable {
         output.reserveCapacity(samples.count)
 
         for input in samples {
-            let value = input.isFinite ? Double(input) : 0
+            let value = audioBandFilter.process(input.isFinite ? Double(input) : 0)
             inPhase[writeIndex] = 2 * value * cos(oscillatorPhase)
             quadrature[writeIndex] = -2 * value * sin(oscillatorPhase)
 
@@ -70,7 +75,7 @@ struct SSTVFrequencyDemodulator: Sendable {
             if right == coefficients.count { right = 0 }
             var filteredI = 0.0
             var filteredQ = 0.0
-            for tap in 0..<latencySamples {
+            for tap in 0..<mixerLatencySamples {
                 let coefficient = coefficients[tap]
                 filteredI += coefficient * (inPhase[left] + inPhase[right])
                 filteredQ += coefficient * (quadrature[left] + quadrature[right])
@@ -78,8 +83,8 @@ struct SSTVFrequencyDemodulator: Sendable {
                 right += 1
                 if right == coefficients.count { right = 0 }
             }
-            filteredI += coefficients[latencySamples] * inPhase[left]
-            filteredQ += coefficients[latencySamples] * quadrature[left]
+            filteredI += coefficients[mixerLatencySamples] * inPhase[left]
+            filteredQ += coefficients[mixerLatencySamples] * quadrature[left]
             writeIndex += 1
             if writeIndex == coefficients.count { writeIndex = 0 }
 

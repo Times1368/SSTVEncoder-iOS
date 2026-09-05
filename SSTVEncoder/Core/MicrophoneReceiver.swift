@@ -3,13 +3,13 @@ import Foundation
 
 struct MicrophoneCapture: Sendable {
     let sampleRate: Int
-    let chunks: AsyncStream<[Float]>
+    let chunks: AsyncThrowingStream<MicrophoneAudioChunk, Error>
 }
 
 @MainActor
 final class MicrophoneReceiver {
     private var engine: AVAudioEngine?
-    private var continuation: AsyncStream<[Float]>.Continuation?
+    private var captureBuffer: MicrophoneCaptureBuffer?
     private var notificationTokens: [NSObjectProtocol] = []
 
     init() {
@@ -80,18 +80,17 @@ final class MicrophoneReceiver {
             throw MicrophoneReceiverError.inputUnavailable
         }
 
-        let pair = AsyncStream<[Float]>.makeStream(
-            bufferingPolicy: .bufferingNewest(32)
-        )
-        let stream = pair.stream
-        let capturedContinuation = pair.continuation
+        let capturedBuffer = MicrophoneCaptureBuffer()
 
         input.installTap(
             onBus: 0,
             bufferSize: 2_048,
             format: format
-        ) { buffer, _ in
-            guard let channels = buffer.floatChannelData else { return }
+        ) { buffer, time in
+            guard let channels = buffer.floatChannelData else {
+                capturedBuffer.finish(throwing: .unreadableBuffer)
+                return
+            }
             let frameCount = Int(buffer.frameLength)
             let channelCount = Int(buffer.format.channelCount)
             guard frameCount > 0, channelCount > 0 else { return }
@@ -104,7 +103,7 @@ final class MicrophoneReceiver {
                 }
                 mono[frame] = value / Float(channelCount)
             }
-            capturedContinuation.yield(mono)
+            capturedBuffer.yield(mono, sampleTime: time.isSampleTimeValid ? time.sampleTime : nil)
         }
 
         do {
@@ -113,16 +112,16 @@ final class MicrophoneReceiver {
             try Task.checkCancellation()
         } catch {
             input.removeTap(onBus: 0)
-            capturedContinuation.finish()
+            capturedBuffer.finish()
             try? session.setActive(false, options: .notifyOthersOnDeactivation)
             throw error
         }
 
         self.engine = engine
-        continuation = capturedContinuation
+        captureBuffer = capturedBuffer
         return MicrophoneCapture(
             sampleRate: Int(format.sampleRate.rounded()),
-            chunks: stream
+            chunks: capturedBuffer.stream
         )
     }
 
@@ -132,8 +131,8 @@ final class MicrophoneReceiver {
             engine.stop()
         }
         engine = nil
-        continuation?.finish()
-        continuation = nil
+        captureBuffer?.finish()
+        captureBuffer = nil
         try? AVAudioSession.sharedInstance().setActive(
             false,
             options: .notifyOthersOnDeactivation

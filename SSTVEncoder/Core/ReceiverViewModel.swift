@@ -127,9 +127,11 @@ final class ReceiverViewModel: ObservableObject {
                     : "正在接收 \(selectedMode.displayName)…"
 
                 var completedFrame: SSTVDecodedFrame?
-                for await chunk in capture.chunks {
+                var continuity = MicrophoneContinuityChecker()
+                for try await chunk in capture.chunks {
                     try Task.checkCancellation()
-                    if let frame = try await decoder.append(chunk) {
+                    try continuity.accept(chunk)
+                    if let frame = try await decoder.append(chunk.samples) {
                         publish(frame, generation: generation)
                         if frame.isComplete {
                             completedFrame = frame
@@ -150,8 +152,6 @@ final class ReceiverViewModel: ObservableObject {
             } catch is CancellationError {
                 // Explicit stop owns microphone and session cleanup.
             } catch {
-                microphone.stop()
-                streamDecoder = nil
                 handle(error, generation: generation)
             }
         }
@@ -242,6 +242,9 @@ final class ReceiverViewModel: ObservableObject {
         generation: ReceiverSessionState<SSTVDecodedFrame>.Generation
     ) {
         guard session.fail(for: generation) else { return }
+        // An older task must not stop the microphone owned by a newer session.
+        microphone.stop()
+        streamDecoder = nil
         receiveTask = nil
         syncSessionState()
         statusText = "接收失败。"

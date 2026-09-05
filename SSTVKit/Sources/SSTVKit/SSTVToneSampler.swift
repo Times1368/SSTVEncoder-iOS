@@ -4,13 +4,14 @@ struct SSTVToneSampler {
     let frequencies: [Float]
     let sampleRate: Int
     let latencySamples: Int
+    var timingScale: Double = 1
 
     var availableRawSampleCount: Int {
         max(0, frequencies.count - latencySamples)
     }
 
     func samples(for duration: Double) -> Int {
-        max(0, Int((duration * Double(sampleRate)).rounded()))
+        max(0, Int((duration * Double(sampleRate) * timingScale).rounded()))
     }
 
     func mean(
@@ -76,7 +77,7 @@ struct SSTVToneSampler {
         var best: (start: Int, mean: Double, score: Double)?
         var candidate = lower
         while candidate <= upper {
-            if let measurement = toneScore(
+            if let measurement = syncPulseScore(
                 rawStart: candidate,
                 duration: duration,
                 targetFrequency: targetFrequency
@@ -95,7 +96,7 @@ struct SSTVToneSampler {
         let refineLower = max(lower, coarse.start - coarseStep)
         let refineUpper = min(upper, coarse.start + coarseStep)
         for refined in refineLower...refineUpper {
-            guard let measurement = toneScore(
+            guard let measurement = syncPulseScore(
                 rawStart: refined,
                 duration: duration,
                 targetFrequency: targetFrequency
@@ -110,6 +111,61 @@ struct SSTVToneSampler {
         return best
     }
 
+    private func syncPulseScore(
+        rawStart: Int,
+        duration: Double,
+        targetFrequency: Double
+    ) -> (score: Double, mean: Double)? {
+        let length = samples(for: duration)
+        let end = rawStart + length
+        guard rawStart >= 0, end <= availableRawSampleCount, length >= 6 else { return nil }
+        // Frequency correction must come from settled sync, not transition
+        // samples mixed with the preceding pixel or following porch.
+        let trim = min(length / 4, max(2, samples(for: 0.001)))
+        let coreStart = rawStart + trim
+        let coreEnd = end - trim
+        let step = max(1, (coreEnd - coreStart) / 47)
+        var core: [Double] = []
+        for index in stride(from: coreStart, to: coreEnd, by: step) {
+            let value = Double(frequencies[index + latencySamples])
+            guard value.isFinite, value >= 700, value <= 3_000 else { return nil }
+            core.append(value)
+        }
+        guard core.count >= 3 else { return nil }
+        core.sort()
+        let median = core[core.count / 2]
+        let deviation = core.reduce(0) { $0 + abs($1 - median) } / Double(core.count)
+        // Opposite frequency errors can average to 1200 Hz without being a
+        // sync pulse. Require a stable, predominantly on-frequency interior.
+        guard abs(median - targetFrequency) <= 180, deviation <= 80 else { return nil }
+        let inliers = core.filter { abs($0 - median) <= 100 }
+        guard inliers.count * 5 >= core.count * 4 else { return nil }
+        let settledMean = inliers.reduce(0, +) / Double(inliers.count)
+
+        func support(from start: Int, to finish: Int) -> Double? {
+            guard start >= 0, finish <= availableRawSampleCount, finish > start else { return nil }
+            let strideSize = max(1, (finish - start) / 47)
+            var total = 0.0
+            var count = 0
+            for index in stride(from: start, to: finish, by: strideSize) {
+                let value = Double(frequencies[index + latencySamples])
+                if value.isFinite {
+                    total += max(0, 1 - abs(value - settledMean) / 180)
+                }
+                count += 1
+            }
+            return total / Double(max(1, count))
+        }
+        let inside = support(from: rawStart, to: end) ?? 0
+        guard inside >= 0.6 else { return nil }
+        let outside = (support(from: rawStart - trim, to: rawStart) ?? 0)
+            + (support(from: end, to: end + trim) ?? 0)
+        guard outside < 1.6 else { return nil } // A continuous carrier is not a pulse.
+        let score = 100 * (1 - inside) + 25 * outside
+            + 0.1 * abs(settledMean - targetFrequency) + 0.2 * deviation
+        return (score, settledMean)
+    }
+
     func component(
         scanStart: Int,
         scanDuration: Double,
@@ -119,9 +175,9 @@ struct SSTVToneSampler {
     ) -> Double {
         guard width > 0, pixel >= 0, pixel < width else { return 0 }
         let exactStart = Double(scanStart)
-            + scanDuration * Double(sampleRate) * Double(pixel) / Double(width)
+            + scanDuration * Double(sampleRate) * timingScale * Double(pixel) / Double(width)
         let exactEnd = Double(scanStart)
-            + scanDuration * Double(sampleRate) * Double(pixel + 1) / Double(width)
+            + scanDuration * Double(sampleRate) * timingScale * Double(pixel + 1) / Double(width)
         let center = (exactStart + exactEnd) / 2
         let halfWindow = max(2, Int(((exactEnd - exactStart) * 0.3).rounded()))
         let start = Int(center.rounded()) - halfWindow

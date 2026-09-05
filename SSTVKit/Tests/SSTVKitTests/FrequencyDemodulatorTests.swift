@@ -2,6 +2,29 @@ import XCTest
 @testable import SSTVKit
 
 final class FrequencyDemodulatorTests: XCTestCase {
+    func testAudioHarmonicsDoNotBecomeFalsePixelColors() throws {
+        for sampleRate in [12_000, 44_100, 48_000] {
+            for tone in [1_500.0, 1_700, 1_900, 2_137, 2_300] {
+                let samples = (0..<Int(Double(sampleRate) * 0.035)).map { index -> Float in
+                    let phase = 2 * Double.pi * tone * Double(index) / Double(sampleRate) + 0.37
+                    return Float(0.6 * sin(phase) + 0.12 * sin(2 * phase + 0.4) + 0.06 * sin(3 * phase + 0.8))
+                }
+                var demodulator = try SSTVFrequencyDemodulator(sampleRate: sampleRate)
+                let frequencies = demodulator.process(samples)
+                let sampler = SSTVToneSampler(
+                    frequencies: frequencies, sampleRate: sampleRate, latencySamples: demodulator.latencySamples
+                )
+                let width = max(3, Int((Double(sampleRate) * 0.00019).rounded()))
+                var maximumError = 0.0
+                for start in Int(Double(sampleRate) * 0.015)..<Int(Double(sampleRate) * 0.028) {
+                    let measured = try XCTUnwrap(sampler.mean(rawStart: start, rawEnd: start + width))
+                    maximumError = max(maximumError, abs(measured - tone))
+                }
+                XCTAssertLessThanOrEqual(maximumError, 5, "\(sampleRate) Hz / \(tone) Hz with 20% second and 10% third harmonic")
+            }
+        }
+    }
+
     func testShortPixelWindowsRecoverSteadyTonesWithoutColorRipple() throws {
         for sampleRate in [6_000, 12_000, 44_100, 48_000] {
             for tone in [1_200.0, 1_500, 1_700, 1_900, 2_137, 2_300] {

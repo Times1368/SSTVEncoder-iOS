@@ -9,10 +9,9 @@ final class SSTVFrameAssembler {
     private(set) var frequencyOffsetHz: Double
     private(set) var completedRows = 0
 
-    private let initialLineStart: Int
+    private var lineClock: SSTVLineClock
     private var pixels: [RGBPixel]
     private var nextScanLine = 0
-    private var lastLineStart: Int?
     private var robotEvenLuma: [Double]?
     private var robotRedDifference: [Double]?
 
@@ -30,9 +29,13 @@ final class SSTVFrameAssembler {
         self.sampleRate = sampleRate
         self.latencySamples = latencySamples
         self.frequencyOffsetHz = frequencyOffsetHz
-        initialLineStart = firstLineStartSample ?? (
+        let initialLineStart = firstLineStartSample ?? (
             pictureStartSample
                 + Int((mode.framePrefixDuration * Double(sampleRate)).rounded())
+        )
+        lineClock = SSTVLineClock(
+            nominalPeriod: mode.lineDuration * Double(sampleRate),
+            firstStart: Double(initialLineStart)
         )
         pixels = Array(repeating: .black, count: mode.width * mode.height)
     }
@@ -51,21 +54,15 @@ final class SSTVFrameAssembler {
 
         while nextScanLine < mode.scanLineCount {
             try Task.checkCancellation()
-            let lineSamples = sampler.samples(for: mode.lineDuration)
-            let expectedLineStart: Int
-            if let lastLineStart {
-                expectedLineStart = lastLineStart + lineSamples
-            } else {
-                expectedLineStart = initialLineStart
-            }
+            let expectedLineStart = Int(lineClock.nextStart.rounded())
 
-            let syncOffset = sampler.samples(for: syncOffsetDuration)
+            let syncOffset = Int((syncOffsetDuration * Double(sampleRate) * lineClock.timingScale).rounded())
             let expectedSyncStart = expectedLineStart + syncOffset
             let tolerance = sampler.samples(for: syncSearchTolerance)
             let enoughForSearch = sampler.availableRawSampleCount >= expectedSyncStart
                 + tolerance + sampler.samples(for: syncDuration)
 
-            var lineStart = expectedLineStart
+            var observedStart: Double?
             var measuredFrequencyOffset: Double?
             if enoughForSearch,
                let sync = sampler.bestToneStart(
@@ -74,13 +71,20 @@ final class SSTVFrameAssembler {
                    duration: syncDuration,
                    targetFrequency: 1_200 + frequencyOffsetHz
                ), sync.score <= 190 {
-                lineStart = sync.start - syncOffset
+                observedStart = Double(sync.start - syncOffset)
                 let measuredOffset = sync.mean - 1_200
                 if abs(measuredOffset) <= 300 {
                     measuredFrequencyOffset = measuredOffset
                 }
             }
 
+            // Speculate on a value copy so repeated incomplete appends cannot
+            // apply the same clock/frequency correction more than once.
+            var nextClock = lineClock
+            let lineStart = Int(nextClock.advance(observedStart: observedStart).rounded())
+            var decodingSampler = sampler
+            decodingSampler.timingScale = nextClock.timingScale
+            let lineSamples = decodingSampler.samples(for: mode.lineDuration)
             guard lineStart >= 0,
                   lineStart + lineSamples <= sampler.availableRawSampleCount else {
                 break
@@ -95,9 +99,9 @@ final class SSTVFrameAssembler {
             }
 
             let rowsBefore = completedRows
-            decode(scanLine: nextScanLine, lineStart: lineStart, sampler: sampler)
+            decode(scanLine: nextScanLine, lineStart: lineStart, sampler: decodingSampler)
             nextScanLine += 1
-            lastLineStart = lineStart
+            lineClock = nextClock
             changed = changed || completedRows != rowsBefore
         }
 
