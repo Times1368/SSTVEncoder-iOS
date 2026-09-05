@@ -28,6 +28,7 @@ targets:
       - path: Features
     resources:
       - path: Resources/Generated/Assets.xcassets
+      - path: Resources/Theme.xcassets
     dependencies:
       - package: SSTVKit
         product: SSTVKit

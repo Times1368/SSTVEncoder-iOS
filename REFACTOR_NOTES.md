@@ -1,5 +1,7 @@
 # SSTV 大改版事实与进度记录
 
+> 后续执行以 `UI_IMPLEMENTATION.md` 和用户 2026-09-05 的确认修订为准。下方 T01 历史方案中“改 tap、给 assembler 加行 observer、禁用 ContentUnavailableView”均已撤销，不得按旧记录实施。
+
 - 勘察日期：2026-09-05
 - 勘察基线：`e2419194f7602e5a99b08c9e53248d53c23bf788`
 - 仓库：`Times1368/SSTVEncoder-iOS`
