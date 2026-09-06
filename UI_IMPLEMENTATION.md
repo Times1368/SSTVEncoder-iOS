@@ -1,5 +1,11 @@
 # UI 改造执行记录
 
+> 本文保留 `ui/design-system` 阶段的范围和验证历史，不是最新总进度。
+> 当前状态与协作要求见 [PROJECT_HANDOFF.zh-CN.md](PROJECT_HANDOFF.zh-CN.md)。
+> 截至 2026-09-06，后续接收质量/中途接收提交 `10cc147` 已通过四项 CI；
+> 用户已授权整合 main。下文“不自动合主干”“不改 Core/DSP”描述的是当时 UI 阶段，
+> 不表示后续获批的接收修复不存在。未来 UI 工作仍不得顺带修改 DSP。
+
 本分支从 `main` 的 `6ab8a20cd44403f2e5fef12ac9def3d9a867c236` 创建，不继承 `ui/baseline`。
 
 ## 当前范围

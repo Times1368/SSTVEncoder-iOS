@@ -1,6 +1,10 @@
 # SSTV 大改版事实与进度记录
 
-> 后续执行以 `UI_IMPLEMENTATION.md` 和用户 2026-09-05 的确认修订为准。下方 T01 历史方案中“改 tap、给 assembler 加行 observer、禁用 ContentUnavailableView”均已撤销，不得按旧记录实施。
+> 当前事实和协作入口为 [PROJECT_HANDOFF.zh-CN.md](PROJECT_HANDOFF.zh-CN.md)。
+> 下方是 T01 勘察快照，行号、两 Tab 描述、待办状态和“当前”字样不再代表最新代码。
+> “改 tap 分流、给 assembler 加行 observer、禁用 ContentUnavailableView”均已撤销，
+> 不得按旧记录实施。已有 completedRows 快照足够驱动 UI；后续独立获批的接收修复
+> 已进入绿色实现提交 `10cc147`，不应被旧版 DSP 文件列表回退。
 
 - 勘察日期：2026-09-05
 - 勘察基线：`e2419194f7602e5a99b08c9e53248d53c23bf788`

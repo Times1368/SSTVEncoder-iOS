@@ -1,5 +1,16 @@
 # SSTVEncoder-iOS
 
+## 当前进度与协作入口
+
+请先阅读 [项目交接与目标要求（中文）](PROJECT_HANDOFF.zh-CN.md)；
+Claude 的精简入口是 [CLAUDE.md](CLAUDE.md)。交接说明区分已实现功能、未完成 UI、
+真实接口、分支合并门槛和完整验收要求，优先于旧勘察记录中的进度表。
+
+当前实现版本为 **1.1.3（5）**：设计系统、接收优先四 Tab、接收同步修复和漏 VIS 的
+中途片段锁定已经实现。[实现提交 10cc147 的四项 CI 全部通过](https://github.com/Times1368/SSTVEncoder-iOS/actions/runs/33956223017)。
+图库和设置仍为骨架；连续多帧入库、完整发射/接收改版、瀑布和商业验收尚未完成。
+CI 成功不代表弱信号、真实电台链路或真机中途接收已全部通过。
+
 SSTVEncoder-iOS is an independent SwiftUI app that encodes photos to SSTV audio
 and decodes SSTV recordings or live microphone input entirely on the iPhone or
 iPad. Both directions are provided by the reusable, Foundation-only `SSTVKit`
@@ -21,6 +32,8 @@ playback, and export of the same signal as a 48 kHz mono signed 16-bit PCM WAV.
 The receiver provides:
 
 - automatic VIS detection and progressive decoding for the same 15 modes;
+- automatic late-entry candidates from repeated line syncs when VIS was missed,
+  with partial-image labeling and no invented original row numbers;
 - manual selection for damaged or missing VIS headers;
 - audio import using every format supported by `AVAudioFile`, including WAV,
   MP3, M4A, AIFF, and CAF where available on the device;
