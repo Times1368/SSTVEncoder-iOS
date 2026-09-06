@@ -238,6 +238,38 @@ class AppIconGenerationTests(unittest.TestCase):
         self.assertFalse(self.output.exists())
 
 
+class PackageContractTests(unittest.TestCase):
+    def test_non_library_tool_target_may_import_apple_frameworks(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            library = root / "SSTVKit" / "Sources" / "SSTVKit"
+            tool = root / "SSTVKit" / "Sources" / "BaselineGenerator"
+            library.mkdir(parents=True)
+            tool.mkdir(parents=True)
+            (root / "SSTVKit" / "Package.swift").write_text(
+                "// swift-tools-version: 5.9\n"
+                "import PackageDescription\n"
+                "let package = Package(\n"
+                "  name: \"SSTVKit\", platforms: [.iOS(.v17)],\n"
+                "  products: [.library(name: \"SSTVKit\", targets: [\"SSTVKit\"])],\n"
+                "  targets: [.target(name: \"SSTVKit\"), "
+                ".testTarget(name: \"SSTVKitTests\", dependencies: [\"SSTVKit\"])])\n",
+                encoding="utf-8",
+            )
+            (library / "Core.swift").write_text(
+                'import Foundation\nlet wavMarkers = "RIFF WAVE fmt  data Int16"\n',
+                encoding="utf-8",
+            )
+            (tool / "Tool.swift").write_text(
+                "import CoreGraphics\nimport ImageIO\nimport SSTVKit\n",
+                encoding="utf-8",
+            )
+
+            validator = ContractValidator(root)
+            validator.validate_package()
+            self.assertEqual(validator.errors, [])
+
+
 class ProjectContractTests(unittest.TestCase):
     PROJECT = """\
 name: SSTVEncoder

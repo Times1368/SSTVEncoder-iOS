@@ -15,6 +15,78 @@ env:
   IPA_NAME: SSTVEncoder.ipa
 
 jobs:
+  baseline_capture:
+    name: Capture procedural encoder baselines
+    if: github.ref == 'refs/heads/ui/baseline'
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - name: Check out capture branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Select Xcode 15.0.1 and verify Swift 5.9
+        timeout-minutes: 2
+        run: |
+          sudo xcode-select -s /Applications/Xcode_15.0.1.app/Contents/Developer
+          swift --version
+          swift --version | /usr/bin/grep -E "Swift version 5\.9"
+
+      - name: Verify production codec and App sources are untouched
+        timeout-minutes: 2
+        run: |
+          GIT_TERMINAL_PROMPT=0 git diff --exit-code \
+            d7453dec4ab35bff6dd56cd63383362aa0bc76ad HEAD -- \
+            SSTVKit/Sources/SSTVKit SSTVEncoder
+
+      - name: Test baseline capture scripts
+        timeout-minutes: 2
+        run: python3 -m unittest scripts.tests.test_baseline_capture -v
+
+      - name: Build the procedural baseline generator
+        timeout-minutes: 2
+        run: python3 scripts/capture_baselines.py build
+
+      - name: Test coordinate fixtures and row-order measurement
+        timeout-minutes: 2
+        run: python3 scripts/capture_baselines.py test-fixture
+
+      - name: Capture Robot 36 and diagnose row order
+        timeout-minutes: 2
+        run: python3 scripts/capture_baselines.py capture --mode robot36Color --output "$RUNNER_TEMP/sstv-baseline"
+
+      - name: Capture Martin M1 and diagnose row order
+        timeout-minutes: 2
+        run: python3 scripts/capture_baselines.py capture --mode martinM1 --output "$RUNNER_TEMP/sstv-baseline"
+
+      - name: Capture PD 120 and diagnose row order
+        timeout-minutes: 2
+        run: python3 scripts/capture_baselines.py capture --mode pd120 --output "$RUNNER_TEMP/sstv-baseline"
+
+      - name: Verify WAV format and publish three SHA-256 hashes
+        timeout-minutes: 2
+        run: |
+          python3 scripts/capture_baselines.py summarize --output "$RUNNER_TEMP/sstv-baseline"
+          cd "$RUNNER_TEMP/sstv-baseline"
+          /usr/bin/shasum -a 256 -c SHA256SUMS
+
+      - name: Upload baseline WAVs, hashes and separate row-order diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sstv-baseline-${{ github.sha }}
+          path: ${{ runner.temp }}/sstv-baseline
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
+
+      - name: Report codec-only row order without blocking encoder baselines
+        continue-on-error: true
+        timeout-minutes: 2
+        run: python3 scripts/capture_baselines.py check-row-order --output "$RUNNER_TEMP/sstv-baseline"
+
   compatibility:
     name: Xcode 15.0.1 / Swift 5.9 / iOS 17 compatibility
     runs-on: macos-14

@@ -9,7 +9,31 @@
 - 勘察日期：2026-09-05
 - 勘察基线：`e2419194f7602e5a99b08c9e53248d53c23bf788`
 - 仓库：`Times1368/SSTVEncoder-iOS`
-- 原则：除明确允许新增的观察回调外，`SSTVKit/Sources/SSTVKit` 视为 DSP 核心，VIS、行时序、色彩转换和重采样行为不得改变。
+- 原则：`SSTVKit/Sources/SSTVKit` 是受保护的 DSP 核心；VIS、行时序、色彩转换和重采样行为不得改变。`SSTVFrameAssembler.swift` 一行不动；已有快照字段足够，不新增算法回调。
+
+## 2026-09-05 用户确认的修订（覆盖旧任务单的冲突要求）
+
+- iOS 17 API 直接使用，不添加低版本分支；允许 `NavigationStack`、`.presentationDetents`、`ContentUnavailableView`、`.symbolEffect`、`@Observable`。保留 SwiftData 和第三方库禁令。新状态管理沿用 `ReceiverViewModel` 风格，不批量改写现有 `ObservableObject`。
+- 编码进度直接接现有 `encode(_:mode:progress:)`；已编码时长读 `PCMBuffer.duration`，未编码预估读 `SSTVMode.totalDuration`。不另算、不解析模式名、不硬编码时长表。
+- `append()` 的 `SSTVDecodedFrame` 已有 `completedRows`、`totalRows`、`progress` 和 `isComplete`（`SSTVDecodeTypes.swift:91-121`）。消费真实快照，UI 限制到 15 fps，以完成行数画扫描线并遮住未收行；禁止改 assembler 或新增逐行 observer。
+- 连续接收只改 App 消费循环：完整帧入库、重置 decoder、继续同一个 `AsyncStream`，不 break、不停麦；等待下一帧期间保留最近图像。
+- 电平和 FFT 在同一个 `for await chunk` 中并联消费同批 `[Float]`，不是再开一个争抢样本的 AsyncStream 迭代器；不改 `MicrophoneReceiver` 的 tap 内部。
+- 发射模式仅含 15 个 `SSTVMode`；HF Fax 保持 `HFFaxProfile` 与现有行为，仅在接收选择中与自动识别 SSTV 并列。
+- `PlaybackController` 仍每 0.1 秒更新；扫描线在 UI 做 0.1 秒线性插值，位置跳过现有引导段。
+- 原样保留两段隐私文案；麦克风仅由用户点击启动；UI 全简体中文。原 UI 稿的布局、持久化、告警和十项验收继续有效。
+- 唯一写仓库执行体为主代理，不启动子代理。Windows 不执行 Swift/Xcode；命令非交互且不超过 120 秒。
+- 每块推到 `ui/<模块名>`，立即提供 Actions 链接，不等待运行结束；CI 通过后才合主干，失败在同分支修复，不带红灯进入下一步。
+
+### 第 0 步实施与证据边界
+
+- 输入为 `TestSupport/BaselineSupport/CoordinateFixture.swift` 中的纯坐标公式，每个模式按原生尺寸生成 `RGBImage`，无图片 IO、无缩放。
+- 48 kHz、幅度 0.8，使用未修改的 Swift 编码器与 WAVEncoder 生成 Robot 36 / Martin M1 / PD 120 各一个 PCM16 单声道 WAV。
+- `capture_baselines.py` 校验 WAV 与实际样本元数据，输出相对文件名的 `SHA256SUMS`，CI 再用 `shasum -a 256 -c` 独立复核。
+- 每个模式的同一份编码 PCM 送入现有解码器，另存 `*-row-order.json`：比较正序与倒序的平均像素误差，同时记录完成行数。结果可为一致、倒序、无法判定或解码失败；后两类不伪装成方向 bug。
+- 行序诊断与 WAV 哈希分开保存。回环只验证编解码链路，不经过 App/PNG 载入器，因此不能据此宣称载入器无 bug。本轮不改载入器；有异常先报告并单独记录。
+- 旧 `Tests/Fixtures/testcard.png` 和生成脚本保留为历史素材，已不参与基线；角点断言、PNG 读取、基线缩放代码已移除。
+- 原采集提交的本地 Python 测试 25/25、CI 基线辅助 Swift 测试 6/6 通过；同次 compatibility job 通过。真实产物已从 run 33936624662 下载，ZIP 与三个 WAV 哈希均复核通过，并归档到 `Tests/Baseline/`。
+- 失败原因已定位为最后一条行序诊断退出 1，编码/WAV/哈希/上传都成功。Martin M1 行序一致；Robot 36 与 PD 120 为 inconclusive，不是已确认倒序。诊断改为非阻断，保留原报告；本轮不重跑基线，不改 DSP/载入器。
 
 ## ① 工程事实表
 
@@ -97,10 +121,10 @@
 
 | 待确认项 | 结论 | 证据与后续处理 |
 |---|---|---|
-| 解码器能否逐行回调？ | **不能（当前没有 row observer）** | DSP 会逐行写像素，但公开层只在每个输入 chunk 后返回 snapshot；一个 chunk 可能包含多行（`SSTVDecoder.swift:34-50`、`SSTVFrameAssembler.swift:52-102`）。T17 必须仅在各协议完成行的位置新增 observer/事件；在完成前不得展示假的逐行动画。 |
+| 解码器能否驱动真实逐行显示？ | **能，使用已有阶段快照** | `append` 完成新行后返回 snapshot（`SSTVDecoder.swift:34-50`），其中 `completedRows` 已公开。UI 节流 15 fps，不新增 observer，不改 assembler。 |
 | 编码器能否取进度？ | **能** | `encode` 的 async progress closure 在每个 radio scan line 后调用（`SSTVEncoder.swift:41-45,64-74`）；PD 进度以 radio line 计数，既有测试覆盖。T11 可在胶水/UI 层节流，不改时序。 |
-| 能否拿到原始 PCM 做频谱？ | **能** | 麦克风 tap 直接拿到 `AVAudioPCMBuffer.floatChannelData`（`MicrophoneReceiver.swift:89-107`）。T15 应在 tap 处分流；现有 tap 每 buffer 分配 mono 数组，不满足新 R5，需要在 T15 设计固定缓冲/无锁交接，不能从 decoder 内反向取数据。 |
-| 模式类型是否有时长字段？ | **有** | `SSTVMode.totalDuration` 与 `sampleCount(at:)` 已存在（`SSTVMode.swift:72-87`），不新增 `nominalDuration`，UI 最终以 T02 真实样本数换算。 |
+| 能否拿到原始 PCM 做频谱？ | **能** | 在 `ReceiverViewModel.startMicrophone()` 的同一 AsyncStream 消费循环中，把 `chunk` 同时交给电平、FFT 与 decoder。禁止改 tap 内部。 |
+| 模式类型是否有时长字段？ | **有** | 编码完成读 `PCMBuffer.duration`，尚未编码读 `SSTVMode.totalDuration`；不新增 `nominalDuration` 或时长计算。 |
 
 ### 其他已确认偏差
 
@@ -108,39 +132,30 @@
 |---|---|---|
 | D01 | Windows 本机没有 Swift/Xcode，且用户明确禁止运行 `swift`、`swift test`、`xcodebuild`、`xcodegen`；任务单 R7 要求每卡本地 `xcodebuild`。 | 采用用户明确的平台约束：本机只运行文本/静态/Python 检查；每卡 commit 推送后由 GitHub Actions 执行 SwiftPM、iOS simulator test 与 device build。所有本机 Swift/Xcode 项一律标为 `NOT RUN`，绝不声称通过。 |
 | D02 | 任务描述“Swift 5.9”指编译器版本；Xcode build setting 仍使用合法的 Swift 5 language mode 值 `5.0`。 | 保持 `SWIFT_VERSION: "5.0"`；由 Xcode 15.0.1 / `swift --version` 的 CI gate 保证 Swift 5.9。`scripts/tests/test_validation_scripts.py` 已防止误写成 `5.9`。 |
-| D03 | 当前 UI 使用 iOS 17 `ContentUnavailableView`（`ContentView.swift:152`、`ReceiveView.swift:217`），而改版 R4 禁止继续使用。 | T04 建立自写 `EmptyStateView`，T08/T13 替换旧页面时移除。 |
+| D03 | 原任务单禁止 `ContentUnavailableView` / `@Observable` 的条款已由用户取消。 | iOS 17 原生 API 可直接使用，无需可用性分支；仍禁止 SwiftData，不为新语法重写既有状态类。 |
 | D04 | T21 描述交付目录内含 3 张 PNG，但本次实际附件只有 `sstv-icon-A.svg`、`Contents.json` 和三张预览 PNG；没有名为 `AppIcon-1024*.png` 的三张最终源文件。 | T21 以 SVG 为唯一矢量真源，确定性脚本生成默认/深色/着色 PNG；不内联 base64。主图必须 RGB 无 alpha，深色/着色可按 Contents 规则保留透明。 |
 | D05 | Creative Production board 工具在当前会话没有可直接调用入口，只有工作流明确禁止的 nested 入口。 | 不绕过、不伪造 board；设计实现以用户提供的 `redesign.html`、SVG、Contents.json 与三张截图为确定性参考。 |
 | D06 | 麦克风会话当前为 `.record` 且路由中断只停止，不会按 T13 自动重启；receiver 完成一帧后也会停止麦克风。 | T13/T18 仅改 App 胶水层与状态机，保留 DSP 算法。真实耳机/蓝牙恢复与连续接收须真机验证。 |
 
 ## ④ 进度表
 
-### 总进度
+### 基线分支当时的进度快照（历史记录，不是合并后的总进度）
 
-| # | 卡片 | 优先级 | 依赖 | 状态 |
-|---|---|---|---|---|
-| T01 | 现状勘察，产出 REFACTOR_NOTES.md | 必做 | — | [x] |
-| T02 | 采集回归基线（改动前的 WAV 指纹） | 必做 | T01 | [ ] |
-| T03 | 设计系统 Theme + 颜色资产 | P0 | T01 | [ ] |
-| T04 | 通用组件库 | P0 | T03 | [ ] |
-| T05 | 四 Tab 骨架 + AppSettings | P0 | T04 | [ ] |
-| T06 | 图库存储层 LibraryStore | P0 | T05 | [ ] |
-| T07 | 图库页面 | P0 | T06 | [ ] |
-| T08 | 发射页重写（结构 + 状态机） | P0 | T05 | [ ] |
-| T09 | 模式选择器（横排 chips + 全部弹层） | P0 | T08 | [ ] |
-| T10 | 发射预览（真实裁切与黑边） | P1 | T08 | [ ] |
-| T11 | 编码进度 + 播放扫描线 + 倒计时 | P1 | T10 | [ ] |
-| T12 | 文字 / 呼号叠加编辑器 | P1 | T10 | [ ] |
-| T13 | 接收页骨架 + 状态条 | P0 | T05 | [ ] |
-| T14 | 输入电平表 + 过载 / 静音提示 | P0 | T13 | [ ] |
-| T15 | 频谱分析器 SpectrumAnalyzer | P1 | T14 | [ ] |
-| T16 | 瀑布视图 WaterfallView | P1 | T15 | [ ] |
-| T17 | 解码逐行落图 | P1 | T13 | [ ] |
-| T18 | 解码完成入库 + 完成行动条 | P0 | T06 T17 | [ ] |
-| T19 | 设置页 | P0 | T05 | [ ] |
-| T20 | 斜率 / ppm 校正 | P2 | T17 | [ ] |
-| T21 | App 图标接入 | P0 | — | [ ] |
-| T22 | 全量验收与回归 | 必做 | 全部 | [ ] |
+设计系统、四 Tab 和接收修复的最新状态见文件顶部链接，不能根据此表的“未开始”回退已实现代码。
+
+| 步骤 | 内容 | 状态 |
+|---|---|---|
+| 0 | 纯算法输入的三模式 WAV 基线与独立行序诊断 | 三个原始 WAV 与哈希已核验归档；行序诊断独立记录，两个模式未定 |
+| 1 | Theme、颜色资产、通用组件 | 未开始 |
+| 2 | 接收默认的四 Tab 骨架 | 未开始 |
+| 3 | 图库存储与图库页 | 未开始 |
+| 4 | 发射页、真实时长、进度、叠字与播放 | 未开始 |
+| 5 | 接收状态条、电平、连续收图、15 fps 快照显示 | 未开始 |
+| 6 | 1024 点 Hann FFT 与 20 fps 瀑布图 | 未开始 |
+| 7 | 设置页 | 未开始 |
+| 8 | 原 UI 稿十项自检与 WAV 哈希回归 | 未开始 |
+
+旧卡片编号仅作勘察历史引用，不扩大本轮范围；第 0 步先报告三个真实哈希，再进入后续 UI。
 
 ### 已完成
 
@@ -155,11 +170,11 @@
 | T01 / R7 本地 Xcode 构建 | NOT RUN | Windows 环境且用户明确禁止本地 Swift/Xcode 命令；commit 后由 GitHub Actions 验证。 |
 | Creative Production board | NOT RUN | 无合规的 direct board tool；使用已提供的确定性设计源。 |
 
-### 待办
+### 基线分支当时的待办（不自动重跑）
 
 | 下一张卡 | 开始条件 | 计划 |
 |---|---|---|
-| T02 | T01 commit 的 GitHub Actions 通过 | 在改业务代码前生成固定 320×256 彩条图与三模式基线 WAV；WAV 必须由当前 Swift 编码器在 macOS CI 生成并记录 SHA-256/样本数/时长，不能在 Windows 伪造。 |
+| 第 0 步 | 用户已确认修订方法及临时分支 CI | 推送 `ui/baseline` 并立即报告 Actions 链接；CI 用纯坐标图生成三个 WAV，报告真实 SHA-256 和行序诊断。禁止本机模拟编码或猜测哈希。 |
 
 ### T01 完成判定自检
 

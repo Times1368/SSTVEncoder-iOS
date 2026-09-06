@@ -1,0 +1,12 @@
+{
+  "completedRows" : 240,
+  "detectedModeMatches" : true,
+  "expectedRows" : 240,
+  "isComplete" : true,
+  "measurement" : {
+    "reversedOrderMeanAbsoluteError" : 73.27737413194444,
+    "sameOrderMeanAbsoluteError" : 51.0637109375,
+    "status" : "inconclusive"
+  },
+  "modeID" : "robot36Color"
+}
