@@ -180,6 +180,7 @@
 | T01 | codex | 2026-09-05 | NOT RECORDED | 15 项工程事实全部填实；53/53 个 Swift 文件入职责表；四个预确认项均给出能/不能与代码位置。 |
 | C1 | codex | 2026-09-06 | [34066638717](https://github.com/Times1368/SSTVEncoder-iOS/actions/runs/34066638717) | 协作规则与 CI 并发保护已进入 `main`，完整 CI 通过。 |
 | C2 | codex | 2026-09-07 | [分支 34072542949](https://github.com/Times1368/SSTVEncoder-iOS/actions/runs/34072542949)；[main 34073861289](https://github.com/Times1368/SSTVEncoder-iOS/actions/runs/34073861289) | 基线工具、原始 WAV 与哈希门禁已进入 `main`；旧远端分支已清理，完整 CI 通过。 |
+| C3 | codex | 2026-09-07 | [34075125897](https://github.com/Times1368/SSTVEncoder-iOS/actions/runs/34075125897) | 双执行体台账、DSP 解冻记录和真实进度状态已落地；完整分支 CI 通过。 |
 
 ### 已降级 / 平台替代
 
