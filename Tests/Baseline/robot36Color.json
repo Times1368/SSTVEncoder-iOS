@@ -1,0 +1,13 @@
+{
+  "amplitude" : 0.8,
+  "durationSeconds" : 36.91,
+  "filename" : "Robot-36-Color.wav",
+  "fixtureFormula" : "r=(x*8)%256;g=(y*8)%256;b=((x+y)*4)%256",
+  "fixtureID" : "coordinate-rgb-v1",
+  "height" : 240,
+  "modeID" : "robot36Color",
+  "modeName" : "Robot 36 Color",
+  "sampleCount" : 1771680,
+  "sampleRate" : 48000,
+  "width" : 320
+}

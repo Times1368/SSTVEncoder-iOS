@@ -1,0 +1,12 @@
+{
+  "completedRows" : 256,
+  "detectedModeMatches" : true,
+  "expectedRows" : 256,
+  "isComplete" : true,
+  "measurement" : {
+    "reversedOrderMeanAbsoluteError" : 73.58611246744792,
+    "sameOrderMeanAbsoluteError" : 7.436909993489583,
+    "status" : "consistent"
+  },
+  "modeID" : "martinM1"
+}

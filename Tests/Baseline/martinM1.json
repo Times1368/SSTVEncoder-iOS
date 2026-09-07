@@ -1,0 +1,13 @@
+{
+  "amplitude" : 0.8,
+  "durationSeconds" : 115.20016666666666,
+  "filename" : "Martin-M1.wav",
+  "fixtureFormula" : "r=(x*8)%256;g=(y*8)%256;b=((x+y)*4)%256",
+  "fixtureID" : "coordinate-rgb-v1",
+  "height" : 256,
+  "modeID" : "martinM1",
+  "modeName" : "Martin M1",
+  "sampleCount" : 5529608,
+  "sampleRate" : 48000,
+  "width" : 320
+}

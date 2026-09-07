@@ -126,10 +126,12 @@ class ContractValidator:
             "binary, system-library, and plugin package targets are not allowed",
         )
 
-        source_root = self.root / "SSTVKit" / "Sources"
+        # Keep the reusable library target Foundation-only without imposing
+        # that boundary on package-local developer tools such as T02 capture.
+        source_root = self.root / "SSTVKit" / "Sources" / "SSTVKit"
         source_files = sorted(source_root.rglob("*.swift")) if source_root.is_dir() else []
         if not source_files:
-            self.fail("SSTVKit/Sources must contain Swift source files")
+            self.fail("SSTVKit/Sources/SSTVKit must contain Swift source files")
             return
 
         all_source = ""
@@ -148,7 +150,7 @@ class ContractValidator:
                 if imported != "Foundation":
                     self.fail(
                         f"{self.relative(path)} imports {imported}; "
-                        "SSTVKit sources may import Foundation only"
+                        "the SSTVKit library target may import Foundation only"
                     )
 
         for marker in ("RIFF", "WAVE", "fmt ", "data"):

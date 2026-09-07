@@ -11,5 +11,8 @@ SSTVEncoder/Resources/Generated/
 *.xcodeproj/
 *.ipa
 *.wav
+!Tests/Baseline/Robot-36-Color.wav
+!Tests/Baseline/Martin-M1.wav
+!Tests/Baseline/PD-120.wav
 *.xcuserstate
 xcuserdata/

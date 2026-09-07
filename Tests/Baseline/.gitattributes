@@ -1,0 +1,5 @@
+# Keep captured evidence byte-identical on Windows and macOS checkouts.
+*.wav -text
+*.json -text
+SHA256SUMS -text
+README.md text eol=lf
