@@ -7,6 +7,8 @@ import UniformTypeIdentifiers
 @MainActor
 struct ContentView: View {
     @State private var selectedTab = AppTab.defaultTab
+    @StateObject private var library = SSTVLibraryStore()
+    @StateObject private var encoder = EncoderViewModel()
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -16,16 +18,17 @@ struct ContentView: View {
                 }
                 .tag(AppTab.receive)
 
-            EncoderView()
+            EncoderView(viewModel: encoder)
                 .tabItem {
                     Label(AppTab.transmit.title, systemImage: AppTab.transmit.systemImage)
                 }
                 .tag(AppTab.transmit)
 
-            LibraryShellView(
-                openReceive: { selectedTab = .receive },
-                openTransmit: { selectedTab = .transmit }
-            )
+            SSTVLibraryView(store: library) { data, modeID in
+                if let mode = SSTVMode(rawValue: modeID) { encoder.selectMode(mode) }
+                encoder.loadImageData(data)
+                selectedTab = .transmit
+            }
                 .tabItem {
                     Label(AppTab.library.title, systemImage: AppTab.library.systemImage)
                 }
@@ -44,7 +47,7 @@ struct ContentView: View {
 
 @MainActor
 private struct EncoderView: View {
-    @StateObject private var viewModel = EncoderViewModel()
+    @ObservedObject var viewModel: EncoderViewModel
     @StateObject private var playback = PlaybackController()
     @State private var pickerItem: PhotosPickerItem?
     @State private var exportDocument: WAVDocument?

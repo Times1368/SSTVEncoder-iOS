@@ -173,6 +173,15 @@ final class SSTVLibraryRepositoryTests: XCTestCase {
         XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: repository.thumbnailsDirectory.path).isEmpty)
     }
 
+    func testReloadPreservesUnindexedImageAfterInterruptedSave() async throws {
+        let repository = SSTVLibraryRepository(rootDirectory: rootDirectory)
+        _ = try await repository.load()
+        let orphan = repository.imageURL(for: UUID())
+        try makePNG(width: 320, height: 256, color: .blue).write(to: orphan)
+        _ = try await repository.reload()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: orphan.path), "不能自动删除中断保存留下的原图")
+    }
+
     private func metadata(
         direction: SSTVLibraryDirection,
         modeID: String,

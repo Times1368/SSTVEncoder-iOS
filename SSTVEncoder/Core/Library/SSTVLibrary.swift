@@ -129,14 +129,18 @@ actor SSTVLibraryRepository {
         try prepareDirectories()
         let records: [SSTVLibraryRecord]
         if fileManager.fileExists(atPath: indexURL.path) {
+            // Read failures (for example locked protected data) are not corrupt JSON.
+            let data = try Data(contentsOf: indexURL)
+            let decoded: [SSTVLibraryRecord]
             do {
-                let data = try Data(contentsOf: indexURL)
-                let decoded = try decoder.decode([SSTVLibraryRecord].self, from: data)
-                records = try reconcile(decoded)
+                decoded = try decoder.decode([SSTVLibraryRecord].self, from: data)
             } catch {
-                quarantineCorruptIndex()
-                records = try rebuildIndexFromImages()
+                try quarantineCorruptIndex()
+                let recovered = try rebuildIndexFromImages()
+                cachedRecords = sorted(recovered)
+                return cachedRecords ?? []
             }
+            records = try reconcile(decoded)
         } else {
             records = try rebuildIndexFromImages()
         }
@@ -290,7 +294,8 @@ actor SSTVLibraryRepository {
         if records != sorted(decoded) {
             try writeIndex(records)
         }
-        removeUnindexedFiles(keeping: Set(records.map(\.id)))
+        // Preserve orphan images: an interrupted save may have written its PNG
+        // before the index was committed. They remain available for recovery.
         return records
     }
 
@@ -339,25 +344,7 @@ actor SSTVLibraryRepository {
         try? thumbnail.write(to: destination, options: .atomic)
     }
 
-    private func removeUnindexedFiles(keeping ids: Set<UUID>) {
-        removeUnindexedFiles(in: imagesDirectory, extension: "png", keeping: ids)
-        removeUnindexedFiles(in: thumbnailsDirectory, extension: "jpg", keeping: ids)
-    }
-
-    private func removeUnindexedFiles(in directory: URL, extension expectedExtension: String, keeping ids: Set<UUID>) {
-        guard let urls = try? fileManager.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else { return }
-        for url in urls where url.pathExtension.lowercased() == expectedExtension {
-            guard let id = UUID(uuidString: url.deletingPathExtension().lastPathComponent),
-                  !ids.contains(id) else { continue }
-            try? fileManager.removeItem(at: url)
-        }
-    }
-
-    private func quarantineCorruptIndex() {
+    private func quarantineCorruptIndex() throws {
         guard fileManager.fileExists(atPath: indexURL.path) else { return }
         let timestamp = Int(Date().timeIntervalSince1970)
         let suffix = UUID().uuidString.prefix(8).lowercased()
@@ -365,12 +352,7 @@ actor SSTVLibraryRepository {
             "index.corrupt-\(timestamp)-\(suffix).json",
             isDirectory: false
         )
-        do {
-            try fileManager.moveItem(at: indexURL, to: destination)
-        } catch {
-            try? fileManager.copyItem(at: indexURL, to: destination)
-            try? fileManager.removeItem(at: indexURL)
-        }
+        try fileManager.copyItem(at: indexURL, to: destination)
     }
 
     private func writeIndex(_ records: [SSTVLibraryRecord]) throws {
