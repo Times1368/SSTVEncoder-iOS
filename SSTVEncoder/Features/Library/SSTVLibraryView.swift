@@ -6,6 +6,12 @@ struct SSTVLibraryView: View {
     @ObservedObject var store: SSTVLibraryStore
     let retransmit: (Data, String) -> Void
     @State private var filter = SSTVLibraryFilter.all
+    @State private var isSelecting = false
+    @State private var selectedIDs: Set<UUID> = []
+
+    private var selectedURLs: [URL] {
+        store.records.filter { selectedIDs.contains($0.id) }.map { store.imageURL(for: $0.id) }
+    }
 
     var body: some View {
         NavigationStack {
@@ -28,12 +34,30 @@ struct SSTVLibraryView: View {
                                 Text(dayTitle(section.id)).font(.subheadline).foregroundStyle(Theme.secondaryText)
                                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Theme.Spacing.unit), count: 3), spacing: Theme.Spacing.unit) {
                                     ForEach(section.records) { record in
-                                        NavigationLink {
-                                            SSTVLibraryDetail(store: store, original: record, retransmit: retransmit)
-                                        } label: {
-                                            SSTVLibraryThumbnail(store: store, record: record)
+                                        if isSelecting {
+                                            Button {
+                                                if !selectedIDs.insert(record.id).inserted {
+                                                    selectedIDs.remove(record.id)
+                                                }
+                                            } label: {
+                                                SSTVLibraryThumbnail(store: store, record: record)
+                                                    .overlay(alignment: .topLeading) {
+                                                        Image(systemName: selectedIDs.contains(record.id) ? "checkmark.circle.fill" : "circle")
+                                                            .foregroundStyle(Theme.onAccent)
+                                                            .padding(Theme.Spacing.unit)
+                                                            .background(Theme.instrument.opacity(0.7), in: Circle())
+                                                    }
+                                            }
+                                            .buttonStyle(.plain)
+                                            .accessibilityValue(selectedIDs.contains(record.id) ? "已选择" : "未选择")
+                                        } else {
+                                            NavigationLink {
+                                                SSTVLibraryDetail(store: store, original: record, retransmit: retransmit)
+                                            } label: {
+                                                SSTVLibraryThumbnail(store: store, record: record)
+                                            }
+                                            .buttonStyle(.plain)
                                         }
-                                        .buttonStyle(.plain)
                                     }
                                 }
                             }
@@ -47,6 +71,37 @@ struct SSTVLibraryView: View {
             .background(Theme.pageBackground)
             .navigationTitle("图库")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(isSelecting ? "完成" : "选择") {
+                        isSelecting.toggle()
+                        selectedIDs.removeAll()
+                    }
+                    .disabled(store.records.isEmpty)
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if isSelecting {
+                    VStack(spacing: Theme.Spacing.unit) {
+                        ShareLink(items: selectedURLs) {
+                            Label("分享所选 \(selectedURLs.count) 张", systemImage: "square.and.arrow.up")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(PrimaryActionStyle())
+                        .disabled(selectedURLs.isEmpty)
+                        if selectedURLs.isEmpty {
+                            Text("先选择要导出的图像").font(.footnote).foregroundStyle(Theme.secondaryText)
+                        }
+                    }
+                    .monospacedDigit()
+                    .padding(Theme.Spacing.regular).background(Theme.pageBackground)
+                }
+            }
+            .onChange(of: filter) { _, _ in selectedIDs.removeAll() }
+            .onChange(of: store.records) { _, records in
+                selectedIDs.formIntersection(Set(records.map(\.id)))
+                if records.isEmpty { isSelecting = false }
+            }
             .task { await store.loadIfNeeded() }
             .alert("图库操作失败", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.dismissError() } })) {
                 Button("好") { store.dismissError() }
@@ -133,6 +188,9 @@ private struct SSTVLibraryDetail: View {
                 if let image {
                     LibraryZoomImage(image: image).frame(height: 320).background(Theme.instrument)
                         .clipShape(RoundedRectangle(cornerRadius: Theme.Metrics.cardRadius))
+                } else if let message {
+                    SSTVEmptyState(title: "无法读取原图", systemImage: "photo.badge.exclamationmark", message: message)
+                        .frame(height: 320)
                 } else { ProgressView("正在读取原图").frame(height: 320) }
                 SSTVCard {
                     VStack(alignment: .leading, spacing: Theme.Spacing.unit) {
@@ -178,8 +236,9 @@ private struct SSTVLibraryDetail: View {
             note = record.note
             do {
                 let data = try await store.imageData(for: record.id)
+                guard let decoded = UIImage(data: data) else { throw SSTVLibraryError.invalidImage }
                 imageData = data
-                image = UIImage(data: data)
+                image = decoded
             } catch { message = error.localizedDescription }
         }
     }
