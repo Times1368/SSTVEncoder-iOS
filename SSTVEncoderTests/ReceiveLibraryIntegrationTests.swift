@@ -15,7 +15,9 @@ final class ReceiveLibraryIntegrationTests: XCTestCase {
         let mode = SSTVMode.robot36Color
         let image = try RGBImage(width: mode.width, height: mode.height,
                                  pixels: Array(repeating: .green, count: mode.width * mode.height))
-        let encoder = try SSTVKit.SSTVEncoder(sampleRate: 48_000)
+        // A complete frame at 12 kHz exercises the import/decoder/archive path
+        // without making this simulator integration test depend on 48 kHz DSP throughput.
+        let encoder = try SSTVKit.SSTVEncoder(sampleRate: 12_000)
         let pcm = try await encoder.encode(image, mode: mode)
         let url = root.appendingPathComponent("input.wav")
         try WAVEncoder.encode(pcm).write(to: url)
@@ -24,6 +26,7 @@ final class ReceiveLibraryIntegrationTests: XCTestCase {
         defer { subscription.cancel(); receiver.stopReceiving() }
         receiver.decodeAudioFile(url)
         await fulfillment(of: [saved], timeout: 90)
+        XCTAssertNil(receiver.errorMessage, receiver.statusText)
         XCTAssertEqual(library.records.count, 1)
         XCTAssertEqual(library.records.first?.modeID, mode.rawValue)
         XCTAssertEqual(library.records.first?.direction, .receive)
