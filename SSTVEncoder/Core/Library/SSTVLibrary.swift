@@ -3,6 +3,7 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 import UIKit
+import SSTVKit
 
 enum SSTVLibraryDirection: String, Codable, CaseIterable, Sendable {
     case receive = "rx"
@@ -419,6 +420,25 @@ final class SSTVLibraryStore: ObservableObject {
 
     func setFavorite(_ isFavorite: Bool, for id: UUID) async throws {
         records = try await repository.setFavorite(isFavorite, for: id)
+    }
+
+    @discardableResult
+    func saveReceivedFrame(_ frame: SSTVDecodedFrame) async throws -> SSTVLibraryRecord {
+        guard frame.completedRows > 0 else { throw SSTVLibraryError.invalidImage }
+        let modeID: String
+        switch frame.mode {
+        case .sstv(let mode): modeID = mode.rawValue
+        case .hfFax(let profile): modeID = "hfFax-\(profile.ioc)-\(profile.linesPerMinute)"
+        }
+        let note: String
+        if frame.detectionSource == .lateEntry {
+            note = "中途接收片段：\(frame.completedRows) 行，原始行号未知。"
+        } else if !frame.isComplete {
+            note = "部分图像：已接收 \(frame.completedRows) 行。"
+        } else { note = "" }
+        return try await save(image: DecodedImageRenderer.image(from: frame.image), metadata: SSTVLibraryMetadata(
+            direction: .receive, modeID: modeID, modeName: frame.mode.displayName, note: note
+        ))
     }
 
     func updateNote(_ note: String, for id: UUID) async throws {

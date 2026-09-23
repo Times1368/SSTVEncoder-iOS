@@ -9,6 +9,7 @@ final class PlaybackController: NSObject, ObservableObject, AVAudioPlayerDelegat
     @Published private(set) var progress = 0.0
 
     private var player: AVAudioPlayer?
+    private var onSuccessfulCompletion: (() -> Void)?
     private var progressTimer: Timer?
     private var notificationTokens: [NSObjectProtocol] = []
 
@@ -60,7 +61,7 @@ final class PlaybackController: NSObject, ObservableObject, AVAudioPlayerDelegat
         }
     }
 
-    func play(_ buffer: PCMBuffer) throws {
+    func play(_ buffer: PCMBuffer, onCompletion: (() -> Void)? = nil) throws {
         stop()
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playback, mode: .default)
@@ -76,6 +77,7 @@ final class PlaybackController: NSObject, ObservableObject, AVAudioPlayerDelegat
         }
 
         player = audioPlayer
+        onSuccessfulCompletion = onCompletion
         isPlaying = true
         progress = 0
         let timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
@@ -86,6 +88,7 @@ final class PlaybackController: NSObject, ObservableObject, AVAudioPlayerDelegat
     }
 
     func stop() {
+        onSuccessfulCompletion = nil
         progressTimer?.invalidate()
         progressTimer = nil
         player?.stop()
@@ -102,7 +105,10 @@ final class PlaybackController: NSObject, ObservableObject, AVAudioPlayerDelegat
         _ player: AVAudioPlayer,
         successfully flag: Bool
     ) {
-        Task { @MainActor [weak self] in self?.finishPlayback() }
+        Task { @MainActor [weak self] in
+            guard let self, self.player === player else { return }
+            self.finishPlayback(successfully: flag)
+        }
     }
 
     private func updateProgress() {
@@ -110,7 +116,9 @@ final class PlaybackController: NSObject, ObservableObject, AVAudioPlayerDelegat
         progress = min(max(player.currentTime / player.duration, 0), 1)
     }
 
-    private func finishPlayback() {
+    private func finishPlayback(successfully: Bool) {
+        let completion = onSuccessfulCompletion
+        onSuccessfulCompletion = nil
         progressTimer?.invalidate()
         progressTimer = nil
         player = nil
@@ -120,6 +128,7 @@ final class PlaybackController: NSObject, ObservableObject, AVAudioPlayerDelegat
             false,
             options: .notifyOthersOnDeactivation
         )
+        if successfully { completion?() }
     }
 }
 
@@ -130,4 +139,3 @@ enum PlaybackError: LocalizedError {
         "无法开始本机音频播放。"
     }
 }
-

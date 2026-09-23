@@ -75,7 +75,7 @@ class TabShellContractTests(unittest.TestCase):
         self.assertIn("TabView(selection: $selectedTab)", shell)
         for tab in ("receive", "transmit", "library", "settings"):
             self.assertIn(f".tag(AppTab.{tab})", shell)
-        self.assertLess(shell.index("ReceiveView()"), shell.index("EncoderView(viewModel: encoder)"))
+        self.assertLess(shell.index("ReceiveView(library: library)"), shell.index("EncoderView(viewModel: encoder, library: library)"))
         self.assertNotIn("startMicrophone", shell)
         self.assertNotIn("requestRecordPermission", shell)
 

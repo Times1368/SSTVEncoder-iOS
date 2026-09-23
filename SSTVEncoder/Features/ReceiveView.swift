@@ -5,7 +5,11 @@ import UniformTypeIdentifiers
 
 @MainActor
 struct ReceiveView: View {
-    @StateObject private var viewModel = ReceiverViewModel()
+    @StateObject private var viewModel: ReceiverViewModel
+
+    init(library: SSTVLibraryStore) {
+        _viewModel = StateObject(wrappedValue: ReceiverViewModel(library: library))
+    }
     @State private var isImportingAudio = false
     @State private var exportDocument: PNGDocument?
     @State private var isExporting = false
@@ -19,6 +23,16 @@ struct ReceiveView: View {
                     inputPanel
                     imagePanel
                     exportPanel
+                    Button {
+                        Task { await viewModel.saveToLibrary() }
+                    } label: {
+                        Label("保存到图库", systemImage: "photo.stack.badge.plus")
+                    }
+                    .buttonStyle(SecondaryActionStyle())
+                    .disabled(!viewModel.canExport || viewModel.isReceiving || viewModel.isSavingToLibrary)
+                    if let message = viewModel.libraryMessage {
+                        Text(message).font(.footnote).foregroundStyle(Theme.secondaryText)
+                    }
                 }
                 .padding()
                 .frame(maxWidth: 760)
