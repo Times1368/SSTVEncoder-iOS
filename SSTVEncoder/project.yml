@@ -47,6 +47,7 @@ targets:
         LSRequiresIPhoneOS: true
         MinimumOSVersion: $(IPHONEOS_DEPLOYMENT_TARGET)
         NSMicrophoneUsageDescription: 用于在您明确启动接收后解码 SSTV 或 HF Fax 音频；原始音频不会保存或上传。
+        NSPhotoLibraryAddUsageDescription: 仅在您点击存入系统相册后添加所选图像。
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
