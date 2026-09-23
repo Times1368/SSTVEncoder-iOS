@@ -12,13 +12,13 @@ struct ContentView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            ReceiveView()
+            ReceiveView(library: library)
                 .tabItem {
                     Label(AppTab.receive.title, systemImage: AppTab.receive.systemImage)
                 }
                 .tag(AppTab.receive)
 
-            EncoderView(viewModel: encoder)
+            EncoderView(viewModel: encoder, library: library)
                 .tabItem {
                     Label(AppTab.transmit.title, systemImage: AppTab.transmit.systemImage)
                 }
@@ -48,6 +48,7 @@ struct ContentView: View {
 @MainActor
 private struct EncoderView: View {
     @ObservedObject var viewModel: EncoderViewModel
+    let library: SSTVLibraryStore
     @StateObject private var playback = PlaybackController()
     @State private var pickerItem: PhotosPickerItem?
     @State private var exportDocument: WAVDocument?
@@ -285,7 +286,18 @@ private struct EncoderView: View {
                         playback.stop()
                     } else if let signal = viewModel.encodedSignal {
                         do {
-                            try playback.play(signal)
+                            let image = viewModel.preparedPreview
+                            let mode = viewModel.mode
+                            try playback.play(signal) {
+                                guard let image else { return }
+                                Task {
+                                    do {
+                                        _ = try await library.save(image: image, metadata: SSTVLibraryMetadata(
+                                            direction: .transmit, modeID: mode.rawValue, modeName: mode.displayName
+                                        ))
+                                    } catch { library.report(error) }
+                                }
+                            }
                         } catch {
                             viewModel.report(error)
                         }

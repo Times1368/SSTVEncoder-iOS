@@ -12,6 +12,42 @@ final class ReceiverViewModel: ObservableObject {
     @Published private(set) var progress = 0.0
     @Published private(set) var statusText = "等待导入音频或启动麦克风。"
     @Published private(set) var errorMessage: String?
+    @Published private(set) var libraryMessage: String?
+    @Published private(set) var isSavingToLibrary = false
+    private let library: SSTVLibraryStore?
+    private var savedFrame: SSTVDecodedFrame?
+    private var activeLibrarySaves = 0
+
+    init(library: SSTVLibraryStore? = nil) {
+        self.library = library
+    }
+
+    func saveToLibrary() async {
+        guard let library, let frame = decodedFrame, frame.completedRows > 0,
+              !isSavingToLibrary else { return }
+        if savedFrame == frame {
+            libraryMessage = "已保存到图库"
+            return
+        }
+        activeLibrarySaves += 1
+        isSavingToLibrary = true
+        defer { finishLibrarySave() }
+        do {
+            _ = try await library.saveReceivedFrame(frame)
+            if decodedFrame == frame {
+                savedFrame = frame
+                libraryMessage = "已保存到图库"
+            }
+        } catch {
+            library.report(error)
+            if decodedFrame == frame { libraryMessage = "入库失败：\(error.localizedDescription)，可重试或导出 PNG。" }
+        }
+    }
+
+    private func finishLibrarySave() {
+        activeLibrarySaves -= 1
+        isSavingToLibrary = activeLibrarySaves > 0
+    }
 
     private let session = ReceiverSessionState<SSTVDecodedFrame>()
     private let microphone = MicrophoneReceiver()
@@ -169,6 +205,8 @@ final class ReceiverViewModel: ObservableObject {
         session.cancel(clearResult: clearResult)
         syncSessionState()
         if clearResult {
+            savedFrame = nil
+            libraryMessage = nil
             decodedImage = nil
             statusText = "等待导入音频或启动麦克风。"
         } else if hadResult {
@@ -242,6 +280,27 @@ final class ReceiverViewModel: ObservableObject {
         }
         receiveTask = nil
         syncSessionState()
+        // Archive only the accepted final result, never each progressive snapshot.
+        // Capture it before suspension so a newer receive operation cannot replace it.
+        if let library, frame.completedRows > 0 {
+            activeLibrarySaves += 1
+            isSavingToLibrary = true
+            Task { [weak self] in
+                defer { self?.finishLibrarySave() }
+                do {
+                    _ = try await library.saveReceivedFrame(frame)
+                    if self?.decodedFrame == frame {
+                        self?.savedFrame = frame
+                        self?.libraryMessage = "已保存到图库"
+                    }
+                } catch {
+                    library.report(error)
+                    if self?.decodedFrame == frame {
+                        self?.libraryMessage = "入库失败：\(error.localizedDescription)，可重试或导出 PNG。"
+                    }
+                }
+            }
+        }
     }
 
     private func handle(
