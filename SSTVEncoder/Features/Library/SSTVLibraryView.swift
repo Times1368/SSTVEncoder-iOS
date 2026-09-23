@@ -211,6 +211,21 @@ private struct SSTVLibraryDetail: View {
                 HStack {
                     ShareLink(item: store.imageURL(for: record.id)) { Label("分享", systemImage: "square.and.arrow.up") }
                         .disabled(imageData == nil)
+                        .frame(maxWidth: .infinity)
+                    Button {
+                        if let imageData {
+                            perform {
+                                try await PhotoLibrarySaver.save(imageData: imageData)
+                                message = "已存入系统相册"
+                            }
+                        }
+                    } label: {
+                        Label("存入系统相册", systemImage: "square.and.arrow.down")
+                    }
+                    .disabled(imageData == nil)
+                    .frame(maxWidth: .infinity)
+                }
+                HStack {
                     Spacer()
                     Button(record.isFavorite ? "取消收藏" : "收藏") {
                         perform { try await store.setFavorite(!record.isFavorite, for: record.id) }
@@ -245,6 +260,7 @@ private struct SSTVLibraryDetail: View {
 
     private func perform(_ action: @escaping @MainActor () async throws -> Void) {
         busy = true
+        message = nil
         Task {
             defer { busy = false }
             do { try await action() } catch { message = error.localizedDescription }
