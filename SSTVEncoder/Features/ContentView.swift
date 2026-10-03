@@ -98,7 +98,7 @@ private struct EncoderView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Label("发射说明", systemImage: "speaker.wave.2")
                         .font(.title2.bold())
-                    Text("本页仅生成、播放和导出 SSTV 音频；不会连接或控制电台发射。")
+                    Text("仅生成、播放和导出音频；不会连接或控制电台发射。")
                     Text("播放时请先调低设备音量。要通过电台发送，请自行确认连接、频率及适用规则。")
                     Spacer()
                 }
