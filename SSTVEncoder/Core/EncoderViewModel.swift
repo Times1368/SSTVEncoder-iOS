@@ -12,6 +12,7 @@ final class EncoderViewModel: ObservableObject {
     @Published private(set) var progress = 0.0
     @Published private(set) var errorMessage: String?
     @Published var cropSelection = CropSelection.identity
+    @Published private(set) var textOverlays: [TransmitTextOverlay] = []
     @Published private(set) var mode: SSTVMode = .robot36Color
 
     private var preparedRaster: RGBImage?
@@ -21,7 +22,15 @@ final class EncoderViewModel: ObservableObject {
     var canEncode: Bool { preparedRaster != nil && !isEncoding }
     var canPlayOrExport: Bool { encodedSignal != nil && !isEncoding }
     var resolutionText: String { "\(mode.width) x \(mode.height)" }
-    var durationText: String { Self.durationFormatter.string(from: mode.totalDuration) ?? "--:--" }
+    var durationText: String {
+        Self.durationFormatter.string(from: encodedSignal?.duration ?? mode.totalDuration) ?? "--:--"
+    }
+    func playbackTimeText(progress: Double) -> String {
+        let duration = encodedSignal?.duration ?? mode.totalDuration
+        let elapsed = min(max(progress, 0), 1) * duration
+        let elapsedText = Self.durationFormatter.string(from: elapsed) ?? "--:--"
+        return "\(elapsedText) / \(durationText)"
+    }
     var exportFilename: String {
         let modeName = mode.displayName.replacingOccurrences(of: " ", with: "-")
         return "SSTV-\(modeName)-48kHz.wav"
@@ -66,7 +75,38 @@ final class EncoderViewModel: ObservableObject {
         cropDidChange()
     }
 
-    func startEncoding() {
+    @discardableResult
+    func addTextOverlay(_ text: String = "") -> UUID {
+        let overlay = TransmitTextOverlay(text: String(text.prefix(32)))
+        textOverlays.append(overlay)
+        overlaysDidChange()
+        return overlay.id
+    }
+
+    func updateTextOverlay(_ id: UUID, text: String) {
+        guard let index = textOverlays.firstIndex(where: { $0.id == id }) else { return }
+        let limited = String(text.prefix(32))
+        guard textOverlays[index].text != limited else { return }
+        textOverlays[index].text = limited
+        overlaysDidChange()
+    }
+
+    func moveTextOverlay(_ id: UUID, to position: CGPoint) {
+        guard let index = textOverlays.firstIndex(where: { $0.id == id }) else { return }
+        textOverlays[index].position = CGPoint(
+            x: min(max(position.x, 0), 1),
+            y: min(max(position.y, 0), 1)
+        )
+        overlaysDidChange()
+    }
+
+    func removeTextOverlay(_ id: UUID) {
+        guard let index = textOverlays.firstIndex(where: { $0.id == id }) else { return }
+        textOverlays.remove(at: index)
+        overlaysDidChange()
+    }
+
+    func startEncoding(onCompletion: (@MainActor (PCMBuffer) -> Void)? = nil) {
         guard let preparedRaster else { return }
         encodingTask?.cancel()
 
@@ -85,7 +125,7 @@ final class EncoderViewModel: ObservableObject {
                         await self?.acceptProgress(value, generation: generation)
                     }
                     guard !Task.isCancelled else { return }
-                    self?.publish(signal, generation: generation)
+                    self?.publish(signal, generation: generation, onCompletion: onCompletion)
                 } catch is CancellationError {
                     // Invalidation already clears the visible state.
                 } catch {
@@ -131,7 +171,8 @@ final class EncoderViewModel: ObservableObject {
             let prepared = try ImagePreparer.prepare(
                 image: sourceImage,
                 mode: mode,
-                selection: cropSelection
+                selection: cropSelection,
+                overlays: textOverlays
             )
             preparedPreview = prepared.preview
             preparedRaster = prepared.raster
@@ -140,6 +181,11 @@ final class EncoderViewModel: ObservableObject {
             preparedRaster = nil
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func overlaysDidChange() {
+        invalidate(for: .crop)
+        refreshPreparedImage()
     }
 
     private func invalidate(for change: EncodingInputChange) {
@@ -160,11 +206,13 @@ final class EncoderViewModel: ObservableObject {
 
     private func publish(
         _ signal: PCMBuffer,
-        generation: EncoderSessionState<PCMBuffer>.Generation
+        generation: EncoderSessionState<PCMBuffer>.Generation,
+        onCompletion: (@MainActor (PCMBuffer) -> Void)?
     ) {
         if session.publish(result: signal, for: generation) {
             encodingTask = nil
             syncSessionState()
+            onCompletion?(signal)
         }
     }
 

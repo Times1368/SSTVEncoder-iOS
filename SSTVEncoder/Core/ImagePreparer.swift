@@ -25,7 +25,8 @@ enum ImagePreparer {
     static func prepare(
         image: UIImage,
         mode: SSTVMode,
-        selection: CropSelection
+        selection: CropSelection,
+        overlays: [TransmitTextOverlay] = []
     ) throws -> PreparedImage {
         let sourceSize = image.size
         guard sourceSize.width > 0, sourceSize.height > 0 else {
@@ -62,6 +63,9 @@ enum ImagePreparer {
             UIColor.black.setFill()
             context.fill(CGRect(origin: .zero, size: targetSize))
             image.draw(in: drawRect)
+            for overlay in overlays where !overlay.text.isEmpty {
+                draw(overlay, in: targetSize)
+            }
         }
 
         guard let sourceCGImage = rendered.cgImage else {
@@ -110,5 +114,28 @@ enum ImagePreparer {
             preview: UIImage(cgImage: previewCGImage, scale: 1, orientation: .up),
             raster: try RGBImage(width: width, height: height, pixels: pixels)
         )
+    }
+
+    private static func draw(_ overlay: TransmitTextOverlay, in size: CGSize) {
+        let text = String(overlay.text.prefix(32)) as NSString
+        var pointSize = min(max(size.width * 0.075, 16), 30)
+        var attributes: [NSAttributedString.Key: Any] = [:]
+        var textSize = CGSize.zero
+        repeat {
+            attributes = [
+                .font: UIFont.systemFont(ofSize: pointSize, weight: .bold),
+                .foregroundColor: UIColor.white,
+                .strokeColor: UIColor.black,
+                .strokeWidth: -14,
+            ]
+            textSize = text.size(withAttributes: attributes)
+            pointSize -= 1
+        } while textSize.width > size.width - 12 && pointSize >= 12
+
+        let x = min(max(overlay.position.x * size.width - textSize.width / 2, 6),
+                    max(6, size.width - textSize.width - 6))
+        let y = min(max(overlay.position.y * size.height - textSize.height / 2, 6),
+                    max(6, size.height - textSize.height - 6))
+        text.draw(at: CGPoint(x: x, y: y), withAttributes: attributes)
     }
 }

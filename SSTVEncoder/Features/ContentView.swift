@@ -18,7 +18,7 @@ struct ContentView: View {
                 }
                 .tag(AppTab.receive)
 
-            EncoderView(viewModel: encoder, library: library)
+            EncoderView(viewModel: encoder, library: library, isActive: selectedTab == .transmit)
                 .tabItem {
                     Label(AppTab.transmit.title, systemImage: AppTab.transmit.systemImage)
                 }
@@ -49,22 +49,27 @@ struct ContentView: View {
 private struct EncoderView: View {
     @ObservedObject var viewModel: EncoderViewModel
     let library: SSTVLibraryStore
+    let isActive: Bool
     @StateObject private var playback = PlaybackController()
     @State private var pickerItem: PhotosPickerItem?
     @State private var exportDocument: WAVDocument?
     @State private var isExporting = false
     @State private var photoLoadTask: Task<Void, Never>?
     @State private var photoLoadGeneration: UInt64 = 0
+    @State private var selectedOverlayID: UUID?
+    @FocusState private var focusedOverlayID: UUID?
+    @AppStorage("transmitCallsign") private var callsign = ""
+    @AppStorage("transmitSafetySeen") private var safetySeen = false
+    @State private var showsSafetyInfo = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
-                    safetyNote
                     imagePanel
+                    if viewModel.sourceImage != nil { overlayPanel }
                     modePanel
-                    encodingPanel
-                    outputPanel
+                    actionPanel
                 }
                 .padding()
                 .frame(maxWidth: 760)
@@ -73,6 +78,39 @@ private struct EncoderView: View {
             .background(Theme.pageBackground)
             .navigationTitle("发射")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showsSafetyInfo = true } label: {
+                        Image(systemName: "info.circle")
+                    }
+                    .accessibilityLabel("发射说明")
+                }
+            }
+        }
+        .onAppear {
+            showFirstSafetyInfoIfNeeded()
+        }
+        .onChange(of: isActive) { _, active in
+            if active { showFirstSafetyInfoIfNeeded() }
+        }
+        .sheet(isPresented: $showsSafetyInfo) {
+            NavigationStack {
+                VStack(alignment: .leading, spacing: 16) {
+                    Label("发射说明", systemImage: "speaker.wave.2")
+                        .font(.title2.bold())
+                    Text("仅生成、播放和导出音频；不会连接或控制电台发射。")
+                    Text("播放时请先调低设备音量。要通过电台发送，请自行确认连接、频率及适用规则。")
+                    Spacer()
+                }
+                .padding()
+                .navigationTitle("发射说明")
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("完成") { showsSafetyInfo = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium])
         }
         .onChange(of: pickerItem) { _, newItem in
             startPhotoLoad(newItem)
@@ -110,23 +148,21 @@ private struct EncoderView: View {
         }
     }
 
-    private var safetyNote: some View {
-        Label("仅生成、播放和导出音频；不会连接或控制电台发射。", systemImage: "speaker.wave.2")
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+    private func showFirstSafetyInfoIfNeeded() {
+        guard isActive, !safetySeen else { return }
+        safetySeen = true
+        showsSafetyInfo = true
     }
 
     private var imagePanel: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let hasImage = viewModel.sourceImage != nil
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label("图片", systemImage: "photo")
                     .font(.headline)
                 Spacer()
                 PhotosPicker(selection: $pickerItem, matching: .images) {
-                    Text(viewModel.sourceImage == nil ? "选择照片" : "更换照片")
+                    Text(hasImage ? "更换照片" : "选择照片")
                 }
                 .buttonStyle(.bordered)
             }
@@ -161,14 +197,22 @@ private struct EncoderView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("编码预览")
                             .font(.subheadline.weight(.semibold))
-                        Image(uiImage: preview)
-                            .resizable()
-                            .interpolation(.high)
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: .infinity, maxHeight: 280)
-                            .background(Color.black)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .accessibilityLabel("最终 SSTV 编码预览")
+                        TransmitPreview(
+                            image: preview,
+                            mode: viewModel.mode,
+                            overlays: viewModel.textOverlays,
+                            playbackProgress: playback.isPlaying ? playback.progress : nil,
+                            playbackDuration: viewModel.encodedSignal?.duration ?? viewModel.mode.totalDuration,
+                            selectedOverlayID: selectedOverlayID,
+                            onSelect: { id in
+                                selectedOverlayID = id
+                                focusedOverlayID = id
+                            },
+                            onMove: { id, position in
+                                playback.stop()
+                                viewModel.moveTextOverlay(id, to: position)
+                            }
+                        )
                         Text("此精确栅格将用于编码；完成拖动或缩放后自动更新。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -186,131 +230,135 @@ private struct EncoderView: View {
         .panelStyle()
     }
 
-    private var modePanel: some View {
+    private var overlayPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("模式", systemImage: "waveform")
-                .font(.headline)
-            ForEach(SSTVModeFamily.allCases, id: \.self) { family in
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(family.displayName)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 138), spacing: 10)],
-                        spacing: 10
-                    ) {
-                        ForEach(family.modes, id: \.self) { mode in
-                            Button {
-                                playback.stop()
-                                viewModel.selectMode(mode)
-                            } label: {
-                                VStack(spacing: 3) {
-                                    Text(mode.displayName)
-                                        .font(.subheadline.weight(.semibold))
-                                    Text("VIS \(mode.visCode)")
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 9)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(viewModel.mode == mode ? .blue : .gray.opacity(0.45))
-                            .accessibilityAddTraits(viewModel.mode == mode ? .isSelected : [])
+            HStack {
+                Label("叠字", systemImage: "textformat")
+                    .font(.headline)
+                Spacer()
+                Button("添加文字") {
+                    playback.stop()
+                    let id = viewModel.addTextOverlay()
+                    selectedOverlayID = id
+                    focusedOverlayID = id
+                }
+                .buttonStyle(.bordered)
+            }
+            ForEach(viewModel.textOverlays) { overlay in
+                HStack {
+                    TextField("输入文字", text: Binding(
+                        get: { viewModel.textOverlays.first(where: { $0.id == overlay.id })?.text ?? "" },
+                        set: {
+                            playback.stop()
+                            viewModel.updateTextOverlay(overlay.id, text: $0)
                         }
+                    ))
+                    .textInputAutocapitalization(.characters)
+                    .focused($focusedOverlayID, equals: overlay.id)
+                    .onTapGesture { selectedOverlayID = overlay.id }
+                    Button(role: .destructive) {
+                        playback.stop()
+                        viewModel.removeTextOverlay(overlay.id)
+                        if selectedOverlayID == overlay.id { selectedOverlayID = nil }
+                    } label: {
+                        Image(systemName: "trash")
                     }
+                    .accessibilityLabel("删除这条叠字")
                 }
             }
-            HStack(spacing: 18) {
-                Label(viewModel.resolutionText, systemImage: "rectangle.split.3x3")
-                Label(viewModel.durationText, systemImage: "timer")
-                Spacer()
-                Text("48 kHz · 单声道 · PCM 16-bit")
+            HStack {
+                TextField("呼号", text: $callsign)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                Button("插入呼号") {
+                    let trimmed = callsign.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return }
+                    playback.stop()
+                    selectedOverlayID = viewModel.addTextOverlay(trimmed)
+                }
+                .disabled(callsign.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            Text("点击文字框编辑；拖动预览中的文字位置。叠字只写入生成图像，原照片保持不变。")
+                .font(.caption)
+                .foregroundStyle(Theme.secondaryText)
         }
         .panelStyle()
     }
 
-    private var encodingPanel: some View {
+    private var modePanel: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("编码", systemImage: "cpu")
-                    .font(.headline)
-                Spacer()
-                if viewModel.isEncoding {
-                    Text(viewModel.progress, format: .percent.precision(.fractionLength(0)))
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                }
+            TransmitModePicker(selectedMode: viewModel.mode) { mode in
+                playback.stop()
+                viewModel.selectMode(mode)
             }
+            HStack {
+                Label(viewModel.resolutionText, systemImage: "rectangle.split.3x3")
+                Spacer()
+                Label(viewModel.durationText, systemImage: "timer")
+            }
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(Theme.secondaryText)
+            Text("\(viewModel.encodedSignal == nil ? "预计" : "实际")时长 · 48 kHz · 单声道 · PCM 16-bit")
+                .font(.caption)
+                .foregroundStyle(Theme.secondaryText)
+        }
+        .panelStyle()
+    }
 
-            ProgressView(value: viewModel.progress)
-                .opacity(viewModel.isEncoding || viewModel.encodedSignal != nil ? 1 : 0.35)
+    private var actionPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("生成与播放", systemImage: "waveform")
+                .font(.headline)
 
             if viewModel.isEncoding {
-                Button("取消编码", role: .cancel) {
+                ProgressView(value: viewModel.progress)
+                Text(viewModel.progress, format: .percent.precision(.fractionLength(0)))
+                    .monospacedDigit()
+                    .font(.caption)
+                    .foregroundStyle(Theme.secondaryText)
+                Button("取消生成", role: .cancel) {
                     viewModel.cancelEncoding()
                 }
                 .buttonStyle(.bordered)
                 .frame(maxWidth: .infinity)
-            } else {
-                Button {
-                    playback.stop()
-                    viewModel.startEncoding()
-                } label: {
-                    Label("开始编码", systemImage: "waveform.badge.plus")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!viewModel.canEncode)
-            }
-        }
-        .panelStyle()
-    }
-
-    private var outputPanel: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("输出", systemImage: "square.and.arrow.up")
-                .font(.headline)
-
-            if playback.isPlaying {
+            } else if playback.isPlaying {
                 ProgressView(value: playback.progress)
+                Text(viewModel.playbackTimeText(progress: playback.progress))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(Theme.secondaryText)
+                PrimaryActionButton(
+                    title: "停止播放", systemImage: "stop.fill", tone: .destructive
+                ) {
+                    playback.stop()
+                }
+            } else {
+                PrimaryActionButton(
+                    title: viewModel.encodedSignal == nil ? "生成并播放" : "播放已生成音频",
+                    systemImage: "play.fill",
+                    disabledReason: primaryDisabledReason
+                ) {
+                    if let signal = viewModel.encodedSignal {
+                        play(signal)
+                    } else {
+                        viewModel.startEncoding(onCompletion: play)
+                    }
+                }
+                if viewModel.encodedSignal != nil {
+                    Text("音频已生成，可再次播放或导出 WAV。")
+                        .font(.caption)
+                        .foregroundStyle(Theme.secondaryText)
+                }
             }
 
             HStack(spacing: 12) {
                 Button {
-                    if playback.isPlaying {
-                        playback.stop()
-                    } else if let signal = viewModel.encodedSignal {
-                        do {
-                            let image = viewModel.preparedPreview
-                            let mode = viewModel.mode
-                            try playback.play(signal) {
-                                guard let image else { return }
-                                Task {
-                                    do {
-                                        _ = try await library.save(image: image, metadata: SSTVLibraryMetadata(
-                                            direction: .transmit, modeID: mode.rawValue, modeName: mode.displayName
-                                        ))
-                                    } catch { library.report(error) }
-                                }
-                            }
-                        } catch {
-                            viewModel.report(error)
-                        }
-                    }
+                    playback.stop()
+                    viewModel.startEncoding()
                 } label: {
-                    Label(
-                        playback.isPlaying ? "停止播放" : "本机播放",
-                        systemImage: playback.isPlaying ? "stop.fill" : "play.fill"
-                    )
-                    .frame(maxWidth: .infinity)
+                    Label("仅生成", systemImage: "waveform.badge.plus")
                 }
                 .buttonStyle(.bordered)
-                .disabled(!viewModel.canPlayOrExport)
+                .disabled(!viewModel.canEncode)
 
                 Button {
                     do {
@@ -321,13 +369,43 @@ private struct EncoderView: View {
                     }
                 } label: {
                     Label("导出 WAV", systemImage: "square.and.arrow.up")
-                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.bordered)
                 .disabled(!viewModel.canPlayOrExport)
+            }
+            .frame(maxWidth: .infinity)
+
+            if !viewModel.canPlayOrExport {
+                Text("先完成编码后才能导出 WAV。")
+                    .font(.caption)
+                    .foregroundStyle(Theme.secondaryText)
             }
         }
         .panelStyle()
+    }
+
+    private var primaryDisabledReason: String? {
+        guard viewModel.encodedSignal == nil, !viewModel.canEncode else { return nil }
+        return viewModel.sourceImage == nil ? "先选择一张照片。" : "图片处理失败，请重新选择。"
+    }
+
+    private func play(_ signal: PCMBuffer) {
+        let image = viewModel.preparedPreview
+        let mode = viewModel.mode
+        do {
+            try playback.play(signal) {
+                guard let image else { return }
+                Task {
+                    do {
+                        _ = try await library.save(image: image, metadata: SSTVLibraryMetadata(
+                            direction: .transmit, modeID: mode.rawValue, modeName: mode.displayName
+                        ))
+                    } catch { library.report(error) }
+                }
+            }
+        } catch {
+            viewModel.report(error)
+        }
     }
 
     private func startPhotoLoad(_ item: PhotosPickerItem?) {
