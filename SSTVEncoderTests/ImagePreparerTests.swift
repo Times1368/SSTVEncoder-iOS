@@ -83,6 +83,31 @@ final class ImagePreparerTests: XCTestCase {
         XCTAssertEqual(prepared.raster[400, 308], .white)
     }
 
+    func testTextIsBurnedIntoEncodedRasterWithoutChangingSourcePhoto() throws {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let source = UIGraphicsImageRenderer(
+            size: CGSize(width: 320, height: 240), format: format
+        ).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 320, height: 240))
+        }
+        let originalData = source.pngData()
+        let plain = try ImagePreparer.prepare(
+            image: source, mode: .robot36Color, selection: .identity
+        )
+        let labeled = try ImagePreparer.prepare(
+            image: source, mode: .robot36Color, selection: .identity,
+            overlays: [TransmitTextOverlay(text: "CQ TEST")]
+        )
+
+        XCTAssertEqual(source.pngData(), originalData)
+        XCTAssertNotEqual(labeled.raster, plain.raster)
+        XCTAssertEqual(labeled.raster[10, 10], .white)
+        XCTAssertEqual(labeled.preview.cgImage?.width, labeled.raster.width)
+    }
+
     private func previewPixel(in image: UIImage, x: Int, y: Int) -> RGBPixel? {
         guard let cgImage = image.cgImage,
               let data = cgImage.dataProvider?.data,
