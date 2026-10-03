@@ -165,7 +165,7 @@
 | 1 | Theme、颜色资产、通用组件 |  | 已完成 |
 | 2 | 接收默认的四 Tab 骨架 |  | 已完成；图库与设置仍是明确占位页 |
 | 3 | 图库存储与图库页 |  | 部分完成：存储、恢复、网格、详情、多选分享、收发入库及按需存入系统相册已通过 CI 并进入 main；48 kHz 收发性能与真机验收待完成 |
-| 4 | 发射页、真实时长、进度、叠字与播放 | codex | 未开始 |
+| 4 | 发射页、真实时长、进度、叠字与播放 |  | 已完成：15 模式选择、原生尺寸叠字、实际时长、生成与播放、扫描线、WAV 导出及发射说明进入 main；Xcode 15/16 CI 已通过，真机体验仍待验收。 |
 | 5 | 接收状态条、电平、连续收图、15 fps 快照显示 |  | 部分完成：接收质量与中途锁定已交付；本步骤 UI、仪表和连续收图未完成 |
 | 6 | 1024 点 Hann FFT 与 20 fps 瀑布图 |  | 未开始 |
 | 7 | 设置页 |  | 未开始 |
@@ -179,6 +179,7 @@
 |---|---|---|---|---|
 | S3 基础阶段 | codex | 2026-09-09 | [34333520519](https://github.com/Times1368/SSTVEncoder-iOS/actions/runs/34333520519) | `a26cbdc` 四个关键 job 全通过；仅代表图库基础阶段，整张 S3 未完成。同步 main 后 rebase 无变化，快进保留原验证 SHA。 |
 | S3 入库与相册阶段 | codex | 2026-09-23 | [35874662506](https://github.com/Times1368/SSTVEncoder-iOS/actions/runs/35874662506) | `6851aa5` 已合并；Xcode 15/16 测试、IPA 打包与独立校验通过；真机相册权限和 48 kHz 收发体验未验收。 |
+| S4 发射流程 | codex | 2026-10-04 | [37157610883](https://github.com/Times1368/SSTVEncoder-iOS/actions/runs/37157610883) | `0574c41` 已合并；Xcode 15/16 测试、IPA 打包和独立校验通过；本机 Xcode 27 生成并校验未签名 IPA，真机体验未验收。 |
 | T01 | codex | 2026-09-05 | NOT RECORDED | 15 项工程事实全部填实；53/53 个 Swift 文件入职责表；四个预确认项均给出能/不能与代码位置。 |
 | C1 | codex | 2026-09-06 | [34066638717](https://github.com/Times1368/SSTVEncoder-iOS/actions/runs/34066638717) | 协作规则与 CI 并发保护已进入 `main`，完整 CI 通过。 |
 | C2 | codex | 2026-09-07 | [分支 34072542949](https://github.com/Times1368/SSTVEncoder-iOS/actions/runs/34072542949)；[main 34073861289](https://github.com/Times1368/SSTVEncoder-iOS/actions/runs/34073861289) | 基线工具、原始 WAV 与哈希门禁已进入 `main`；旧远端分支已清理，完整 CI 通过。 |
