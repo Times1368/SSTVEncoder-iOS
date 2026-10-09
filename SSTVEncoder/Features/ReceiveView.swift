@@ -5,11 +5,7 @@ import UniformTypeIdentifiers
 
 @MainActor
 struct ReceiveView: View {
-    @StateObject private var viewModel: ReceiverViewModel
-
-    init(library: SSTVLibraryStore) {
-        _viewModel = StateObject(wrappedValue: ReceiverViewModel(library: library))
-    }
+    @ObservedObject var viewModel: ReceiverViewModel
     @State private var isImportingAudio = false
     @State private var exportDocument: PNGDocument?
     @State private var isExporting = false
@@ -77,11 +73,6 @@ struct ReceiveView: View {
             Button("好", role: .cancel) { viewModel.dismissError() }
         } message: {
             Text(viewModel.errorMessage ?? "未知错误")
-        }
-        .onDisappear {
-            if viewModel.isReceiving {
-                viewModel.stopReceiving()
-            }
         }
     }
 
@@ -190,6 +181,13 @@ struct ReceiveView: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+            if viewModel.isUsingMicrophone {
+                Text("切换页面或锁屏后仍会继续接收；返回此页点击“停止接收”结束。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             if viewModel.isLateEntry {
                 Text("中途接收 · 不估算整图完成率")

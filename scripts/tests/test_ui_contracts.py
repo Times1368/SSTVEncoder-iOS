@@ -76,9 +76,10 @@ class TabShellContractTests(unittest.TestCase):
         for tab in ("receive", "transmit", "library", "settings"):
             self.assertIn(f".tag(AppTab.{tab})", shell)
         self.assertLess(
-            shell.index("ReceiveView(library: library)"),
+            shell.index("ReceiveView(viewModel: receiver)"),
             shell.index("EncoderView(viewModel: encoder, library: library,"),
         )
+        self.assertIn("_receiver = StateObject(wrappedValue: ReceiverViewModel(library: library))", shell)
         self.assertNotIn("startMicrophone", shell)
         self.assertNotIn("requestRecordPermission", shell)
 
@@ -91,7 +92,17 @@ class TabShellContractTests(unittest.TestCase):
         self.assertIn('.navigationTitle("接收")', receive)
         for source in (transmit, receive):
             self.assertIn(".navigationBarTitleDisplayMode(.inline)", source)
-            self.assertIn(".onDisappear", source)
+        self.assertIn(".onDisappear", transmit)
+        self.assertNotIn(".onDisappear", receive)
+
+    def test_receive_session_survives_tab_changes(self) -> None:
+        shell = (ROOT / "SSTVEncoder/Features/ContentView.swift").read_text(encoding="utf-8")
+        receive = (ROOT / "SSTVEncoder/Features/ReceiveView.swift").read_text(encoding="utf-8")
+        self.assertIn("@StateObject private var receiver: ReceiverViewModel", shell)
+        self.assertIn("ReceiveView(viewModel: receiver)", shell)
+        self.assertIn("@ObservedObject var viewModel: ReceiverViewModel", receive)
+        self.assertNotIn("stopReceiving()", receive.split("private var privacyNote", 1)[0])
+        self.assertIn("切换页面或锁屏后仍会继续接收", receive)
 
     def test_new_tabs_do_not_pretend_to_have_persistence_or_start_audio(self) -> None:
         source = (ROOT / "SSTVEncoder/Features/AppShellViews.swift").read_text(encoding="utf-8")

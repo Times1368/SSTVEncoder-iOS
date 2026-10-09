@@ -7,12 +7,19 @@ import UniformTypeIdentifiers
 @MainActor
 struct ContentView: View {
     @State private var selectedTab = AppTab.defaultTab
-    @StateObject private var library = SSTVLibraryStore()
+    @StateObject private var library: SSTVLibraryStore
+    @StateObject private var receiver: ReceiverViewModel
     @StateObject private var encoder = EncoderViewModel()
+
+    init() {
+        let library = SSTVLibraryStore()
+        _library = StateObject(wrappedValue: library)
+        _receiver = StateObject(wrappedValue: ReceiverViewModel(library: library))
+    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            ReceiveView(library: library)
+            ReceiveView(viewModel: receiver)
                 .tabItem {
                     Label(AppTab.receive.title, systemImage: AppTab.receive.systemImage)
                 }
