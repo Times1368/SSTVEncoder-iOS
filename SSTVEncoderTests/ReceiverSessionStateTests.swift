@@ -56,4 +56,31 @@ final class ReceiverSessionStateTests: XCTestCase {
         XCTAssertFalse(state.isActive)
         XCTAssertEqual(state.progress, 0, accuracy: 0.000_001)
     }
+
+    func testCompletedMicrophoneFrameKeepsCaptureActiveAndResetsProgress() {
+        let state = ReceiverSessionState<String>()
+        let generation = state.begin(input: .microphone)
+        XCTAssertTrue(state.publish(result: "first rows", progress: 0.9, for: generation))
+
+        XCTAssertTrue(state.completeFrameAndContinue(result: "first complete", for: generation))
+        XCTAssertTrue(state.isActive)
+        XCTAssertEqual(state.input, .microphone)
+        XCTAssertEqual(state.result, "first complete")
+        XCTAssertEqual(state.progress, 0, accuracy: 0.000_001)
+
+        XCTAssertTrue(state.publish(result: "second rows", progress: 0.1, for: generation))
+        XCTAssertEqual(state.result, "second rows")
+        XCTAssertEqual(state.progress, 0.1, accuracy: 0.000_001)
+        state.cancel(clearResult: false)
+        XCTAssertEqual(state.result, "second rows")
+        XCTAssertFalse(state.completeFrameAndContinue(result: "late", for: generation))
+    }
+
+    func testFileCannotContinueAfterCompletedFrame() {
+        let state = ReceiverSessionState<String>()
+        let generation = state.begin(input: .audioFile)
+        XCTAssertFalse(state.completeFrameAndContinue(result: "done", for: generation))
+        XCTAssertNil(state.result)
+        XCTAssertTrue(state.isActive)
+    }
 }

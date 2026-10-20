@@ -14,9 +14,12 @@ final class ReceiverViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var libraryMessage: String?
     @Published private(set) var isSavingToLibrary = false
+    @Published private(set) var isWaitingForNextFrame = false
     private let library: SSTVLibraryStore?
     private var savedFrame: SSTVDecodedFrame?
     private var activeLibrarySaves = 0
+    private var archiveSerial = 0
+    private var libraryMessageTask: Task<Void, Never>?
 
     init(library: SSTVLibraryStore? = nil) {
         self.library = library
@@ -52,7 +55,7 @@ final class ReceiverViewModel: ObservableObject {
     private let session = ReceiverSessionState<SSTVDecodedFrame>()
     private let microphone = MicrophoneReceiver()
     private var receiveTask: Task<Void, Never>?
-    private var streamDecoder: SSTVStreamDecoder?
+    private var streamDecoder: ContinuousStreamDecoder?
 
     static let selections: [SSTVReceiveSelection] = [
         .automatic,
@@ -156,7 +159,7 @@ final class ReceiverViewModel: ObservableObject {
             do {
                 let capture = try await microphone.start()
                 try Task.checkCancellation()
-                let decoder = try SSTVStreamDecoder(
+                let decoder = try ContinuousStreamDecoder(
                     sampleRate: capture.sampleRate,
                     selection: selectedMode
                 )
@@ -165,29 +168,39 @@ final class ReceiverViewModel: ObservableObject {
                     ? "正在监听，识别模式头或尝试中途锁定…"
                     : "正在接收 \(selectedMode.displayName)…"
 
-                var completedFrame: SSTVDecodedFrame?
                 var continuity = MicrophoneContinuityChecker()
                 for try await chunk in capture.chunks {
                     try Task.checkCancellation()
                     try continuity.accept(chunk)
                     if let frame = try await decoder.append(chunk.samples) {
-                        publish(frame, generation: generation)
                         if frame.isComplete {
-                            completedFrame = frame
-                            break
+                            completeMicrophoneFrame(
+                                frame,
+                                count: decoder.completedFrameCount,
+                                generation: generation
+                            )
+                        } else {
+                            publish(frame, generation: generation)
                         }
                     }
                 }
                 try Task.checkCancellation()
-                let finalFrame: SSTVDecodedFrame
-                if let completedFrame {
-                    finalFrame = completedFrame
-                } else {
-                    finalFrame = try await decoder.finish()
+                do {
+                    let finalFrame = try await decoder.finish()
+                    microphone.stop()
+                    streamDecoder = nil
+                    finish(finalFrame, generation: generation, source: .microphone)
+                } catch let error as SSTVDecodeError
+                    where decoder.completedFrameCount > 0
+                        && (error == .headerNotFound || error == .noImageData) {
+                    microphone.stop()
+                    streamDecoder = nil
+                    guard session.stop(for: generation) else { return }
+                    isWaitingForNextFrame = false
+                    syncSessionState()
+                    receiveTask = nil
+                    statusText = "麦克风输入已结束，保留最近收到的图像。"
                 }
-                microphone.stop()
-                streamDecoder = nil
-                finish(finalFrame, generation: generation, source: .microphone)
             } catch is CancellationError {
                 // Explicit stop owns microphone and session cleanup.
             } catch {
@@ -205,6 +218,9 @@ final class ReceiverViewModel: ObservableObject {
         session.cancel(clearResult: clearResult)
         syncSessionState()
         if clearResult {
+            archiveSerial &+= 1
+            libraryMessageTask?.cancel()
+            libraryMessageTask = nil
             savedFrame = nil
             libraryMessage = nil
             decodedImage = nil
@@ -214,6 +230,7 @@ final class ReceiverViewModel: ObservableObject {
         } else {
             statusText = "接收已停止。"
         }
+        isWaitingForNextFrame = false
     }
 
     func makeExportDocument() throws -> PNGDocument {
@@ -242,6 +259,7 @@ final class ReceiverViewModel: ObservableObject {
         ) else { return }
         do {
             decodedImage = try DecodedImageRenderer.image(from: frame.image)
+            isWaitingForNextFrame = false
             syncSessionState()
             statusText = frame.detectionSource == .lateEntry
                 ? "中途接收 \(frame.mode.displayName)：\(rowDescription(frame))"
@@ -249,6 +267,19 @@ final class ReceiverViewModel: ObservableObject {
         } catch {
             handle(error, generation: generation)
         }
+    }
+
+    private func completeMicrophoneFrame(
+        _ frame: SSTVDecodedFrame,
+        count: Int,
+        generation: ReceiverSessionState<SSTVDecodedFrame>.Generation
+    ) {
+        publish(frame, generation: generation)
+        guard session.completeFrameAndContinue(result: frame, for: generation) else { return }
+        isWaitingForNextFrame = true
+        syncSessionState()
+        statusText = "第 \(count) 张图像已接收，继续监听下一帧。"
+        archive(frame, transientMessage: true)
     }
 
     private func finish(
@@ -279,27 +310,43 @@ final class ReceiverViewModel: ObservableObject {
                 : "接收已停止，保留当前图像：\(rowDescription(frame))"
         }
         receiveTask = nil
+        isWaitingForNextFrame = false
         syncSessionState()
-        // Archive only the accepted final result, never each progressive snapshot.
-        // Capture it before suspension so a newer receive operation cannot replace it.
-        if let library, frame.completedRows > 0 {
-            activeLibrarySaves += 1
-            isSavingToLibrary = true
-            Task { [weak self] in
-                defer { self?.finishLibrarySave() }
-                do {
-                    _ = try await library.saveReceivedFrame(frame)
-                    if self?.decodedFrame == frame {
-                        self?.savedFrame = frame
-                        self?.libraryMessage = "已保存到图库"
-                    }
-                } catch {
-                    library.report(error)
-                    if self?.decodedFrame == frame {
-                        self?.libraryMessage = "入库失败：\(error.localizedDescription)，可重试或导出 PNG。"
-                    }
-                }
+        archive(frame, transientMessage: false)
+    }
+
+    private func archive(_ frame: SSTVDecodedFrame, transientMessage: Bool) {
+        guard let library, frame.completedRows > 0 else { return }
+        archiveSerial &+= 1
+        let serial = archiveSerial
+        activeLibrarySaves += 1
+        isSavingToLibrary = true
+        Task { [weak self] in
+            defer { self?.finishLibrarySave() }
+            do {
+                _ = try await library.saveReceivedFrame(frame)
+                guard let self, self.archiveSerial == serial else { return }
+                if self.decodedFrame == frame { self.savedFrame = frame }
+                self.showLibraryMessage("已保存到图库", transient: transientMessage)
+            } catch {
+                library.report(error)
+                guard let self, self.archiveSerial == serial else { return }
+                self.showLibraryMessage(
+                    "入库失败：\(error.localizedDescription)，可重试或导出 PNG。",
+                    transient: false
+                )
             }
+        }
+    }
+
+    private func showLibraryMessage(_ message: String, transient: Bool) {
+        libraryMessageTask?.cancel()
+        libraryMessage = message
+        guard transient else { return }
+        libraryMessageTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.libraryMessage = nil
         }
     }
 
@@ -312,6 +359,7 @@ final class ReceiverViewModel: ObservableObject {
         microphone.stop()
         streamDecoder = nil
         receiveTask = nil
+        isWaitingForNextFrame = false
         syncSessionState()
         statusText = "接收失败。"
         errorMessage = error.localizedDescription
