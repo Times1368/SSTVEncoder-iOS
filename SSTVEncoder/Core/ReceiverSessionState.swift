@@ -49,6 +49,14 @@ final class ReceiverSessionState<Result> {
     }
 
     @discardableResult
+    func completeFrameAndContinue(result: Result, for candidate: Generation) -> Bool {
+        guard candidate == generation, isActive, input == .microphone else { return false }
+        self.result = result
+        progress = 0
+        return true
+    }
+
+    @discardableResult
     func stop(for candidate: Generation) -> Bool {
         guard candidate == generation, isActive else { return false }
         input = nil

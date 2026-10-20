@@ -189,7 +189,11 @@ struct ReceiveView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            if viewModel.isLateEntry {
+            if viewModel.isWaitingForNextFrame {
+                Text("上一张图像已保留，正在等待下一帧。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if viewModel.isLateEntry {
                 Text("中途接收 · 不估算整图完成率")
                     .font(.caption)
                     .foregroundStyle(.secondary)
