@@ -2,14 +2,14 @@
 
 ## 当前进度与协作入口
 
-请先阅读 [项目交接与目标要求（中文）](PROJECT_HANDOFF.zh-CN.md)；
-Claude 的精简入口是 [CLAUDE.md](CLAUDE.md)。交接说明区分已实现功能、未完成 UI、
-真实接口、分支合并门槛和完整验收要求，优先于旧勘察记录中的进度表。
+请先阅读 [2026-11-06 项目交接](HANDOFF_2026-11-06.zh-CN.md)。
+当前进度以 [REFACTOR_NOTES.md](REFACTOR_NOTES.md) 为准，协作规则以
+[AGENTS.md](AGENTS.md) 为准；[旧交接文件](PROJECT_HANDOFF.zh-CN.md)保留目标细节和历史调查。
 
-当前实现版本为 **1.1.3（5）**：设计系统、接收优先四 Tab、接收同步修复和漏 VIS 的
-中途片段锁定已经实现。[实现提交 10cc147 的四项 CI 全部通过](https://github.com/Times1368/SSTVEncoder-iOS/actions/runs/33956223017)。
-图库和设置仍为骨架；连续多帧入库、完整发射/接收改版、瀑布和商业验收尚未完成。
-CI 成功不代表弱信号、真实电台链路或真机中途接收已全部通过。
+当前 App 版本为 **1.1.3（5）**。图库与发射流程已接入，接收支持切换 Tab 后持续监听、
+后台音频配置和连续多帧收图；接收仪表、瀑布、设置与真机验收仍待完成。
+[最近一次完整功能代码 CI](https://github.com/Times1368/SSTVEncoder-iOS/actions/runs/39418522412)
+已通过。CI 成功不代表弱信号、真实电台链路或真机锁屏接收已通过。
 
 SSTVEncoder-iOS is an independent SwiftUI app that encodes photos to SSTV audio
 and decodes SSTV recordings or live microphone input entirely on the iPhone or
